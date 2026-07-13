@@ -1,6 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.1**
+Current build: **0.4.0-rc.2**
+
+This candidate adds Lumenloom's separate portrait-mobile gameplay profile: relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding when the game launches from Mastery Grove. Its desktop gameplay profile and shared scoring/progression contract remain unchanged.
 
 This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, and Prismbind. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
 

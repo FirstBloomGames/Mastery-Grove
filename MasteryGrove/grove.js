@@ -428,6 +428,18 @@
     ui.frameLoadingActions.classList.add('is-hidden');
   }
 
+  function lumenloomPlatformProfile() {
+    const forcedProfile = new URLSearchParams(location.search).get('profile');
+    if (forcedProfile === 'mobile' || forcedProfile === 'desktop') return forcedProfile;
+
+    const coarsePointer = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+    const noHover = Boolean(window.matchMedia?.('(hover: none)')?.matches);
+    const touchDevice = Number(navigator.maxTouchPoints || 0) > 0;
+    const viewportLooksHandheld = Math.min(window.innerWidth, window.innerHeight) <= 600
+      && Math.max(window.innerWidth, window.innerHeight) <= 1000;
+    return coarsePointer || noHover || touchDevice || viewportLooksHandheld ? 'mobile' : 'desktop';
+  }
+
   function openGame(gameId) {
     const game = GAMES[gameId];
     if (!game || !progression.isGameUnlocked(profile, gameId)) {
@@ -459,7 +471,13 @@
       ui.trialProgress.classList.add('is-hidden');
     }
     ui.gameFrame.title = `${game.title} inside the Mastery Grove`;
-    ui.gameFrame.src = `${game.path}?grove=1&trial=${trialSession?.active ? 1 : 0}&session=${encodeURIComponent(activeSessionId)}`;
+    const gameParams = new URLSearchParams({
+      grove: '1',
+      trial: trialSession?.active ? '1' : '0',
+      session: activeSessionId
+    });
+    if (gameId === 'lumenloom') gameParams.set('profile', lumenloomPlatformProfile());
+    ui.gameFrame.src = `${game.path}?${gameParams}`;
     syncModalState();
     const expectedSession = activeSessionId;
     readyTimer = window.setTimeout(() => {

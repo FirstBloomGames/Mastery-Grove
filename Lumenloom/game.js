@@ -14,6 +14,7 @@
   const isEmbedded = window.parent !== window;
 
   const ui = {
+    app: $('app'),
     hud: $('hud'),
     phaseName: $('phaseName'),
     scoreValue: $('scoreValue'),
@@ -59,7 +60,10 @@
     resultLoops: $('resultLoops'),
     resultShadows: $('resultShadows'),
     replayButton: $('replayButton'),
-    homeButton: $('homeButton')
+    homeButton: $('homeButton'),
+    mobileMoveZone: $('mobileMoveZone'),
+    mobileStick: $('mobileStick'),
+    mobileStickKnob: $('mobileStickKnob')
   };
 
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -83,6 +87,147 @@
   let lastFrame = performance.now();
   let nextId = 1;
   let random = mulberry32(Date.now() >>> 0);
+  const PLAYER_RADIUS = 18;
+  const ANCHOR_RADIUS = 27;
+  const profileOverride = ['mobile', 'desktop'].includes(pageParams.get('profile')) ? pageParams.get('profile') : '';
+
+  function resolveControlProfile(options = {}) {
+    const override = options.override || '';
+    if (override === 'mobile' || override === 'mobile-portrait') return 'mobile-portrait';
+    if (override === 'desktop') return 'desktop';
+
+    const width = Math.max(1, Number(options.width) || 1);
+    const height = Math.max(1, Number(options.height) || 1);
+    const coarsePointer = Boolean(options.coarsePointer);
+    const touchPoints = Math.max(0, Number(options.touchPoints) || 0);
+    // Coarse-pointer devices stay mobile when rotated. A touch-capable laptop
+    // only opts in automatically when its viewport is tablet-sized or smaller.
+    const mobileDevice = coarsePointer || (touchPoints > 0 && (width <= 1024 || height <= 600));
+    return mobileDevice ? 'mobile-portrait' : 'desktop';
+  }
+
+  function calculatePlayBounds(width, height, profile) {
+    width = Math.max(1, Number(width) || 1);
+    height = Math.max(1, Number(height) || 1);
+    const mobile = profile === 'mobile' || profile === 'mobile-portrait';
+    let left;
+    let right;
+    let top;
+    let bottom;
+
+    if (mobile) {
+      const sideInset = clamp(width * 0.06, 20, 34);
+      const topInset = clamp(height * 0.105, 78, 108);
+      const bottomInset = clamp(height * 0.21, 118, 196);
+      left = sideInset;
+      right = width - sideInset;
+      top = topInset;
+      bottom = height - bottomInset;
+    } else {
+      // These are the established desktop player limits. Keeping them here
+      // protects the existing mouse/keyboard composition from mobile tuning.
+      left = 26;
+      right = width - 26;
+      top = 124;
+      bottom = height - 26;
+    }
+
+    // Extremely small embedded frames should still produce finite geometry.
+    if (right <= left) {
+      left = Math.max(0, width * 0.1);
+      right = Math.min(width, width * 0.9);
+    }
+    if (bottom <= top) {
+      top = Math.max(0, height * 0.1);
+      bottom = Math.min(height, height * 0.9);
+    }
+
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+      centerX: (left + right) / 2,
+      centerY: (top + bottom) / 2,
+      playerRadius: PLAYER_RADIUS,
+      anchorRadius: ANCHOR_RADIUS
+    };
+  }
+
+  function clampPointToBounds(point, bounds) {
+    return {
+      x: clamp(Number(point.x) || 0, bounds.left, bounds.right),
+      y: clamp(Number(point.y) || 0, bounds.top, bounds.bottom)
+    };
+  }
+
+  function calculateTutorialLayout(width, height, profile) {
+    const bounds = calculatePlayBounds(width, height, profile);
+    if (profile === 'desktop') {
+      const cx = width / 2;
+      const cy = height / 2;
+      const spreadX = Math.min(215, width * 0.18);
+      const spreadY = Math.min(155, height * 0.21);
+      return {
+        player: clampPointToBounds({ x: cx, y: cy + Math.min(120, height * 0.15) }, bounds),
+        anchors: [
+          clampPointToBounds({ x: cx - spreadX, y: cy + spreadY * 0.45 }, bounds),
+          clampPointToBounds({ x: cx, y: cy - spreadY }, bounds),
+          clampPointToBounds({ x: cx + spreadX, y: cy + spreadY * 0.45 }, bounds)
+        ]
+      };
+    }
+
+    const flowerBounds = insetBounds(bounds, ANCHOR_RADIUS + 4);
+    const cx = flowerBounds.centerX;
+    const cy = flowerBounds.top + flowerBounds.height * 0.47;
+    const spreadX = clamp(flowerBounds.width * 0.38, 72, 132);
+    const spreadY = clamp(flowerBounds.height * 0.29, 78, 150);
+    const lowerY = cy + spreadY * 0.42;
+    const playerLead = clamp(bounds.height * 0.21, 70, 116);
+    return {
+      player: clampPointToBounds({ x: bounds.centerX, y: lowerY + playerLead }, bounds),
+      anchors: [
+        clampPointToBounds({ x: cx - spreadX, y: lowerY }, flowerBounds),
+        clampPointToBounds({ x: cx, y: cy - spreadY }, flowerBounds),
+        clampPointToBounds({ x: cx + spreadX, y: lowerY }, flowerBounds)
+      ]
+    };
+  }
+
+  function insetBounds(bounds, amountX, amountTop = amountX, amountBottom = amountX) {
+    const left = Math.min(bounds.centerX, bounds.left + Math.max(0, amountX));
+    const right = Math.max(bounds.centerX, bounds.right - Math.max(0, amountX));
+    const top = Math.min(bounds.centerY, bounds.top + Math.max(0, amountTop));
+    const bottom = Math.max(bounds.centerY, bounds.bottom - Math.max(0, amountBottom));
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+      centerX: (left + right) / 2,
+      centerY: (top + bottom) / 2
+    };
+  }
+
+  function currentDeviceProfile(width = W, height = H) {
+    return resolveControlProfile({
+      override: profileOverride,
+      width,
+      height,
+      coarsePointer: window.matchMedia?.('(pointer: coarse)').matches,
+      touchPoints: navigator.maxTouchPoints || 0
+    });
+  }
+
+  let controlProfile = currentDeviceProfile(W, H);
+  let playBounds = calculatePlayBounds(W, H, controlProfile);
+  let viewportOrientation = W > H ? 'landscape' : 'portrait';
+  let orientationBlocked = controlProfile === 'mobile-portrait' && viewportOrientation === 'landscape';
 
   const phaseDefs = [
     {
@@ -222,7 +367,15 @@
     pointerType: 'mouse',
     x: W / 2,
     y: H / 2,
-    lastKeyboard: 0
+    lastKeyboard: 0,
+    mobilePointerId: null,
+    stickOriginX: 0,
+    stickOriginY: 0,
+    stickX: 0,
+    stickY: 0,
+    stickMagnitude: 0,
+    actionPointers: new Set(),
+    lastTouchActionAt: -Infinity
   };
 
   class AudioGarden {
@@ -439,12 +592,134 @@
     catch (_) { /* local file privacy modes may disable storage */ }
   }
 
+  function isMobileProfile() {
+    return controlProfile === 'mobile-portrait';
+  }
+
+  function setStyleProperty(element, name, value) {
+    if (!element?.style) return;
+    if (typeof element.style.setProperty === 'function') element.style.setProperty(name, value);
+    else element.style[name] = value;
+  }
+
+  function setProfileDomState() {
+    viewportOrientation = W > H ? 'landscape' : 'portrait';
+    orientationBlocked = isMobileProfile() && viewportOrientation === 'landscape';
+    const displayProfile = isMobileProfile() ? `mobile-${viewportOrientation}` : 'desktop';
+    const roots = [document.documentElement, document.body, ui.app, canvas].filter(Boolean);
+    roots.forEach((element) => {
+      element.classList.remove('profile-desktop', 'profile-mobile', 'profile-mobile-portrait', 'profile-mobile-landscape', 'is-orientation-blocked');
+      element.classList.add(isMobileProfile() ? 'profile-mobile' : 'profile-desktop');
+      // "mobile-portrait" names the mobile control/layout profile. Landscape
+      // is an orientation state layered on top so phones never become desktop.
+      if (isMobileProfile()) element.classList.add('profile-mobile-portrait');
+      if (isMobileProfile() && viewportOrientation === 'landscape') element.classList.add('profile-mobile-landscape');
+      element.classList.toggle('is-orientation-blocked', orientationBlocked);
+      element.dataset.controlProfile = controlProfile;
+      element.dataset.profile = displayProfile;
+      element.dataset.orientation = viewportOrientation;
+      element.dataset.orientationBlocked = String(orientationBlocked);
+    });
+  }
+
+  function syncMobileStickVisual(active = input.mobilePointerId !== null) {
+    const originX = active ? input.stickOriginX : Math.max(72, W * 0.21);
+    const originY = active ? input.stickOriginY : Math.min(H - 72, H * 0.79);
+    const targets = [ui.mobileMoveZone, ui.mobileStick].filter(Boolean);
+    targets.forEach((element) => {
+      setStyleProperty(element, '--stick-x', `${originX}px`);
+      setStyleProperty(element, '--stick-y', `${originY}px`);
+      setStyleProperty(element, '--stick-dx', `${input.stickX}px`);
+      setStyleProperty(element, '--stick-dy', `${input.stickY}px`);
+      element.classList.toggle('is-active', active);
+      element.dataset.active = String(active);
+    });
+    if (ui.mobileStickKnob) {
+      setStyleProperty(ui.mobileStickKnob, '--stick-dx', `${input.stickX}px`);
+      setStyleProperty(ui.mobileStickKnob, '--stick-dy', `${input.stickY}px`);
+      ui.mobileStickKnob.dataset.active = String(active);
+    }
+  }
+
+  function resetMobileStick(pointerId = null) {
+    if (pointerId !== null && input.mobilePointerId !== pointerId) return;
+    input.mobilePointerId = null;
+    input.stickX = 0;
+    input.stickY = 0;
+    input.stickMagnitude = 0;
+    input.pointerActive = false;
+    syncMobileStickVisual(false);
+  }
+
+  function updateMobileStick(point) {
+    const maxDistance = clamp(Math.min(W, H) * 0.16, 46, 68);
+    const deadZone = Math.max(7, maxDistance * 0.13);
+    const rawX = point.x - input.stickOriginX;
+    const rawY = point.y - input.stickOriginY;
+    const rawLength = Math.hypot(rawX, rawY);
+    const visualScale = rawLength > maxDistance ? maxDistance / rawLength : 1;
+    input.stickX = rawX * visualScale;
+    input.stickY = rawY * visualScale;
+    if (rawLength <= deadZone) {
+      input.stickMagnitude = 0;
+    } else {
+      input.stickMagnitude = clamp((Math.min(rawLength, maxDistance) - deadZone) / (maxDistance - deadZone), 0, 1);
+    }
+    syncMobileStickVisual(true);
+  }
+
+  function getAnchorPlacementBounds() {
+    if (isMobileProfile()) return insetBounds(playBounds, ANCHOR_RADIUS + 4);
+    const side = Math.max(58, W * 0.055);
+    const top = Math.max(150, H * 0.18);
+    const bottomInset = Math.max(95, H * 0.13);
+    return {
+      left: Math.max(playBounds.left, side),
+      right: Math.min(playBounds.right, W - side),
+      top: Math.max(playBounds.top, top),
+      bottom: Math.min(playBounds.bottom, H - bottomInset),
+      width: Math.min(playBounds.right, W - side) - Math.max(playBounds.left, side),
+      height: Math.min(playBounds.bottom, H - bottomInset) - Math.max(playBounds.top, top),
+      centerX: W / 2,
+      centerY: (Math.max(playBounds.top, top) + Math.min(playBounds.bottom, H - bottomInset)) / 2
+    };
+  }
+
+  function getEnemyBounds(radius) {
+    if (isMobileProfile()) return insetBounds(playBounds, radius);
+    const left = Math.max(playBounds.left, radius + 18);
+    const right = Math.min(playBounds.right, W - radius - 18);
+    const top = Math.max(playBounds.top, 125 + radius);
+    const bottom = Math.min(playBounds.bottom, H - radius - 18);
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+      centerX: (left + right) / 2,
+      centerY: (top + bottom) / 2
+    };
+  }
+
+  function remapPoint(point, from, to) {
+    const nx = clamp((point.x - from.left) / Math.max(1, from.width), 0, 1);
+    const ny = clamp((point.y - from.top) / Math.max(1, from.height), 0, 1);
+    point.x = lerp(to.left, to.right, nx);
+    point.y = lerp(to.top, to.bottom, ny);
+  }
+
   function resize() {
     const oldW = W;
     const oldH = H;
+    const oldBounds = { ...playBounds };
     const rect = canvas.getBoundingClientRect();
     W = Math.max(320, rect.width);
     H = Math.max(240, rect.height);
+    controlProfile = currentDeviceProfile(W, H);
+    playBounds = calculatePlayBounds(W, H, controlProfile);
+    setProfileDomState();
     DPR = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
@@ -456,17 +731,25 @@
       const sx = W / oldW;
       const sy = H / oldH;
       const scalePoint = (p) => { p.x *= sx; p.y *= sy; };
-      scalePoint(state.player);
-      state.anchors.forEach(scalePoint);
-      state.enemies.forEach(scalePoint);
-      state.wildBlooms.forEach(scalePoint);
+      remapPoint(state.player, oldBounds, playBounds);
+      state.anchors.forEach((anchor) => remapPoint(anchor, oldBounds, playBounds));
+      state.enemies.forEach((enemy) => remapPoint(enemy, oldBounds, playBounds));
+      state.wildBlooms.forEach((bloom) => remapPoint(bloom, oldBounds, playBounds));
       state.particles.forEach(scalePoint);
       state.floaters.forEach(scalePoint);
-      state.regions.forEach((region) => region.points.forEach(scalePoint));
+      state.regions.forEach((region) => region.points.forEach((point) => remapPoint(point, oldBounds, playBounds)));
+
+      const clampedPlayer = clampPointToBounds(state.player, playBounds);
+      state.player.x = clampedPlayer.x;
+      state.player.y = clampedPlayer.y;
+      const anchorBounds = getAnchorPlacementBounds();
+      state.anchors.forEach((anchor) => Object.assign(anchor, clampPointToBounds(anchor, anchorBounds)));
+      state.enemies.forEach((enemy) => Object.assign(enemy, clampPointToBounds(enemy, getEnemyBounds(enemy.radius))));
     } else {
-      state.player.x = W / 2;
-      state.player.y = H / 2;
+      state.player.x = playBounds.centerX;
+      state.player.y = playBounds.centerY;
     }
+    resetMobileStick();
     generateBackdrop();
   }
 
@@ -518,6 +801,7 @@
   function startRun() {
     if (isTrialRun && state.mode === 'result') return;
     audio.init();
+    resetMobileStick();
     random = mulberry32((Date.now() ^ Math.round(performance.now() * 1000)) >>> 0);
     state.mode = 'playing';
     postToGrove('run-start');
@@ -549,7 +833,7 @@
     state.completed = false;
     state.tutorialStep = 0;
     state.upgrades = { speed: 1, frayWindow: 0.85, captureRefund: 16, chainWindow: 6, ward: false };
-    state.player = { x: W / 2, y: H / 2, vx: 0, vy: 0, facing: -Math.PI / 2, invulnerable: 1.1, wing: 0 };
+    state.player = { x: playBounds.centerX, y: playBounds.centerY, vx: 0, vy: 0, facing: -Math.PI / 2, invulnerable: 1.1, wing: 0 };
     ui.hud.classList.remove('is-hidden');
     closeDialogs(canvas);
     beginPhase(0);
@@ -572,8 +856,11 @@
     state.frayTimer = 0;
     state.weaveAge = 0;
     state.spawnTimer = phaseDefs[index].spawnInterval * 0.65;
-    state.player.x = W / 2;
-    state.player.y = H / 2 + (index === 0 ? Math.min(120, H * 0.15) : 0);
+    const phaseStart = index === 0
+      ? calculateTutorialLayout(W, H, controlProfile).player
+      : { x: playBounds.centerX, y: playBounds.centerY };
+    state.player.x = phaseStart.x;
+    state.player.y = phaseStart.y;
     state.player.vx = 0;
     state.player.vy = 0;
     // Phase banners are readable, not a trap. The grace window outlasts the
@@ -596,30 +883,25 @@
 
   function generateAnchors(count, tutorial) {
     const anchors = [];
-    const top = Math.max(150, H * 0.18);
-    const bottom = Math.max(95, H * 0.13);
-    const side = Math.max(58, W * 0.055);
-    const minDist = clamp(Math.min(W, H) * 0.145, 86, 132);
+    const bounds = getAnchorPlacementBounds();
+    const baseMinDist = isMobileProfile()
+      ? clamp(Math.min(bounds.width, bounds.height) * 0.235, 62, 96)
+      : clamp(Math.min(W, H) * 0.145, 86, 132);
 
     if (tutorial) {
-      const cx = W / 2;
-      const cy = H / 2;
-      const spreadX = Math.min(215, W * 0.18);
-      const spreadY = Math.min(155, H * 0.21);
-      [
-        { x: cx - spreadX, y: cy + spreadY * 0.45 },
-        { x: cx, y: cy - spreadY },
-        { x: cx + spreadX, y: cy + spreadY * 0.45 }
-      ].forEach((p, guide) => anchors.push(makeAnchor(p.x, p.y, guide)));
+      calculateTutorialLayout(W, H, controlProfile).anchors
+        .forEach((point, guide) => anchors.push(makeAnchor(point.x, point.y, guide)));
     }
 
     let attempts = 0;
-    while (anchors.length < count && attempts < 900) {
+    while (anchors.length < count && attempts < 1600) {
       attempts++;
-      const x = side + random() * Math.max(20, W - side * 2);
-      const y = top + random() * Math.max(20, H - top - bottom);
-      if (Math.hypot(x - W / 2, y - H / 2) < 92) continue;
-      if (anchors.some((a) => Math.hypot(a.x - x, a.y - y) < minDist)) continue;
+      const x = bounds.left + random() * Math.max(1, bounds.width);
+      const y = bounds.top + random() * Math.max(1, bounds.height);
+      const centerClearance = isMobileProfile() ? Math.min(74, baseMinDist * 0.92) : 92;
+      if (Math.hypot(x - playBounds.centerX, y - playBounds.centerY) < centerClearance) continue;
+      const relaxation = attempts > 1100 ? 0.78 : attempts > 700 ? 0.88 : 1;
+      if (anchors.some((a) => Math.hypot(a.x - x, a.y - y) < baseMinDist * relaxation)) continue;
       anchors.push(makeAnchor(x, y, -1));
     }
 
@@ -632,7 +914,7 @@
       x,
       y,
       guide,
-      radius: 27,
+      radius: ANCHOR_RADIUS,
       touchCooldown: 0,
       awakened: false,
       bloom: 0,
@@ -642,30 +924,30 @@
   }
 
   function spawnEnemy(type, initial = false) {
-    const margin = 46;
-    let x;
-    let y;
-    if (initial) {
-      let tries = 0;
-      do {
-        x = margin + random() * (W - margin * 2);
-        y = Math.max(150, margin) + random() * (H - Math.max(150, margin) - 80);
-        tries++;
-      } while (Math.hypot(x - state.player.x, y - state.player.y) < 190 && tries < 40);
-    } else {
-      const edge = Math.floor(random() * 4);
-      if (edge === 0) { x = margin; y = 130 + random() * (H - 210); }
-      if (edge === 1) { x = W - margin; y = 130 + random() * (H - 210); }
-      if (edge === 2) { x = margin + random() * (W - margin * 2); y = 135; }
-      if (edge === 3) { x = margin + random() * (W - margin * 2); y = H - 68; }
-    }
-
     const data = {
       drifter: { radius: 17, speed: 45 + random() * 18 },
       seeker: { radius: 19, speed: 58 + random() * 14 },
       rusher: { radius: 20, speed: 42 + random() * 9 },
       boss: { radius: 61, speed: 27 }
     }[type];
+    const bounds = getEnemyBounds(data.radius);
+    let x;
+    let y;
+    if (initial) {
+      let tries = 0;
+      const safeDistance = Math.min(190, Math.hypot(bounds.width, bounds.height) * 0.36);
+      do {
+        x = bounds.left + random() * Math.max(1, bounds.width);
+        y = bounds.top + random() * Math.max(1, bounds.height);
+        tries++;
+      } while (Math.hypot(x - state.player.x, y - state.player.y) < safeDistance && tries < 40);
+    } else {
+      const edge = Math.floor(random() * 4);
+      if (edge === 0) { x = bounds.left; y = bounds.top + random() * bounds.height; }
+      if (edge === 1) { x = bounds.right; y = bounds.top + random() * bounds.height; }
+      if (edge === 2) { x = bounds.left + random() * bounds.width; y = bounds.top; }
+      if (edge === 3) { x = bounds.left + random() * bounds.width; y = bounds.bottom; }
+    }
 
     state.enemies.push({
       id: nextId++,
@@ -739,11 +1021,11 @@
     updateParticles(dt);
     updateFloaters(dt);
 
-    if (state.mode === 'playing') {
+    if (state.mode === 'playing' && !orientationBlocked) {
       state.runTime += dt;
       updatePlaying(dt);
       audio.update();
-    } else if (state.mode === 'transition') {
+    } else if (state.mode === 'transition' && !orientationBlocked) {
       updateEnemies(dt * 0.22, false);
       state.transitionTimer -= dt;
       if (state.phaseIndex === phaseDefs.length - 1) state.dawn = clamp(state.dawn + dt * 0.42, 0, 1);
@@ -793,7 +1075,12 @@
     if (input.keys.has('d') || input.keys.has('arrowright')) dx += 1;
 
     const usingKeys = dx !== 0 || dy !== 0;
-    if (!usingKeys && input.pointerActive && performance.now() - input.lastKeyboard > 350) {
+    let intentStrength = 1;
+    if (!usingKeys && isMobileProfile() && input.mobilePointerId !== null && input.stickMagnitude > 0) {
+      dx = input.stickX;
+      dy = input.stickY;
+      intentStrength = 0.38 + input.stickMagnitude * 0.62;
+    } else if (!usingKeys && !isMobileProfile() && input.pointerActive && performance.now() - input.lastKeyboard > 350) {
       const pdx = input.x - p.x;
       const pdy = input.y - p.y;
       if (Math.hypot(pdx, pdy) > 18) {
@@ -814,12 +1101,15 @@
 
     const length = Math.hypot(dx, dy);
     const accel = 890;
-    const maxSpeed = 235 * state.upgrades.speed * (state.chain.length ? 1.08 : 1);
+    const analogSpeed = !usingKeys && isMobileProfile() && input.mobilePointerId !== null
+      ? 0.48 + input.stickMagnitude * 0.52
+      : 1;
+    const maxSpeed = 235 * state.upgrades.speed * (state.chain.length ? 1.08 : 1) * analogSpeed;
     if (length > 0) {
       dx /= length;
       dy /= length;
-      p.vx += dx * accel * dt;
-      p.vy += dy * accel * dt;
+      p.vx += dx * accel * dt * intentStrength;
+      p.vy += dy * accel * dt * intentStrength;
     } else {
       const drag = Math.exp(-5.8 * dt);
       p.vx *= drag;
@@ -839,12 +1129,10 @@
 
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    const margin = 26;
-    const top = 124;
-    if (p.x < margin) { p.x = margin; p.vx = Math.abs(p.vx) * 0.35; }
-    if (p.x > W - margin) { p.x = W - margin; p.vx = -Math.abs(p.vx) * 0.35; }
-    if (p.y < top) { p.y = top; p.vy = Math.abs(p.vy) * 0.35; }
-    if (p.y > H - margin) { p.y = H - margin; p.vy = -Math.abs(p.vy) * 0.35; }
+    if (p.x < playBounds.left) { p.x = playBounds.left; p.vx = Math.abs(p.vx) * 0.35; }
+    if (p.x > playBounds.right) { p.x = playBounds.right; p.vx = -Math.abs(p.vx) * 0.35; }
+    if (p.y < playBounds.top) { p.y = playBounds.top; p.vy = Math.abs(p.vy) * 0.35; }
+    if (p.y > playBounds.bottom) { p.y = playBounds.bottom; p.vy = -Math.abs(p.vy) * 0.35; }
 
     if (speed > 65 && random() < dt * 18) {
       addParticle(p.x - Math.cos(p.facing) * 13, p.y - Math.sin(p.facing) * 13, {
@@ -1290,12 +1578,11 @@
   }
 
   function confineEnemy(enemy) {
-    const margin = enemy.radius + 18;
-    const top = 125 + enemy.radius;
-    if (enemy.x < margin) { enemy.x = margin; enemy.vx = Math.abs(enemy.vx); }
-    if (enemy.x > W - margin) { enemy.x = W - margin; enemy.vx = -Math.abs(enemy.vx); }
-    if (enemy.y < top) { enemy.y = top; enemy.vy = Math.abs(enemy.vy); }
-    if (enemy.y > H - margin) { enemy.y = H - margin; enemy.vy = -Math.abs(enemy.vy); }
+    const bounds = getEnemyBounds(enemy.radius);
+    if (enemy.x < bounds.left) { enemy.x = bounds.left; enemy.vx = Math.abs(enemy.vx); }
+    if (enemy.x > bounds.right) { enemy.x = bounds.right; enemy.vx = -Math.abs(enemy.vx); }
+    if (enemy.y < bounds.top) { enemy.y = bounds.top; enemy.vy = Math.abs(enemy.vy); }
+    if (enemy.y > bounds.bottom) { enemy.y = bounds.bottom; enemy.vy = -Math.abs(enemy.vy); }
   }
 
   function checkEnemyCollision(enemy, segments) {
@@ -1504,35 +1791,43 @@
 
   function updateObjective() {
     const phase = phaseDefs[state.phaseIndex];
+    const mobile = isMobileProfile();
     if (state.phaseIndex === 0) {
       if (!state.chain.length && state.phaseProgress === 0) {
-        ui.objectiveText.textContent = 'Glide to a flower and take up the thread';
-        ui.objectiveProgress.textContent = 'SPACE / CLICK';
+        ui.objectiveText.textContent = mobile ? 'Find a gold bloom' : 'Glide to a flower and take up the thread';
+        ui.objectiveProgress.textContent = mobile ? '✦' : 'SPACE / CLICK';
       } else if (state.chain.length < 3 && state.phaseProgress === 0) {
-        ui.objectiveText.textContent = `Touch ${3 - state.chain.length} more flower${3 - state.chain.length === 1 ? '' : 's'} to pin the loom`;
+        ui.objectiveText.textContent = mobile
+          ? `${3 - state.chain.length} bloom${3 - state.chain.length === 2 ? 's' : ''} to go`
+          : `Touch ${3 - state.chain.length} more flower${3 - state.chain.length === 1 ? '' : 's'} to pin the loom`;
         ui.objectiveProgress.textContent = `${state.chain.length} / 3`;
       } else if (state.phaseProgress === 0) {
-        ui.objectiveText.textContent = 'Return to the golden first flower';
-        ui.objectiveProgress.textContent = 'SEAL IT';
+        ui.objectiveText.textContent = mobile ? 'Return to gold' : 'Return to the golden first flower';
+        ui.objectiveProgress.textContent = mobile ? '✦' : 'SEAL IT';
       } else {
-        ui.objectiveText.textContent = 'The first part of the garden remembers';
+        ui.objectiveText.textContent = mobile ? 'First bloom awake' : 'The first part of the garden remembers';
         ui.objectiveProgress.textContent = '1 / 1';
       }
       ui.objectiveKicker.textContent = 'THE FIRST THREAD';
     } else if (phase.boss) {
       ui.objectiveKicker.textContent = 'CLOSE THE DARKNESS THREE TIMES';
-      ui.objectiveText.textContent = state.phaseProgress === 0 ? 'Enclose the Hollow in a sealed weave' : 'Its shell is cracked. Weave it again.';
+      ui.objectiveText.textContent = mobile
+        ? (state.phaseProgress === 0 ? 'Enclose the Hollow' : 'Seal it again')
+        : (state.phaseProgress === 0 ? 'Enclose the Hollow in a sealed weave' : 'Its shell is cracked. Weave it again.');
       ui.objectiveProgress.textContent = `${state.phaseProgress} / 3`;
     } else {
       const time = Math.max(0, Math.ceil(state.phaseTime));
       ui.objectiveKicker.textContent = `GATHER BLOOMLIGHT · ${Math.floor(time / 60)}:${String(time % 60).padStart(2, '0')}`;
-      ui.objectiveText.textContent = 'Seal shadows and wake new flowers';
+      ui.objectiveText.textContent = mobile ? 'Wake blooms' : 'Seal shadows and wake new flowers';
       ui.objectiveProgress.textContent = `${Math.min(state.phaseProgress, state.phaseTarget)} / ${state.phaseTarget}`;
     }
   }
 
   function updateHud() {
-    ui.phaseName.textContent = phaseDefs[state.phaseIndex]?.title || 'LUMENLOOM';
+    const phaseTitle = phaseDefs[state.phaseIndex]?.title || 'LUMENLOOM';
+    ui.phaseName.textContent = isMobileProfile()
+      ? ({ 'FIRST STITCH': 'STITCH', 'THE HOLLOW': 'HOLLOW' }[phaseTitle] || phaseTitle)
+      : phaseTitle;
     ui.scoreValue.textContent = formatNumber(state.score);
     ui.bestValue.textContent = `BEST ${formatNumber(Math.max(state.best, state.score))}`;
     const lumenPercent = clamp(state.lumen / state.maxLumen * 100, 0, 100);
@@ -1543,8 +1838,10 @@
     ui.healthValue.textContent = `${state.lives} / 3`;
     ui.petalDisplay.setAttribute('aria-label', `Health, ${state.lives} of 3 petals`);
     ui.wardIndicator.classList.toggle('is-hidden', !state.upgrades.ward);
-    ui.weaveButtonLabel.textContent = state.chain.length ? 'RELEASE' : 'WEAVE';
-    ui.weaveButton.classList.toggle('is-cancel', state.chain.length > 0);
+    const weaving = state.chain.length > 0;
+    ui.weaveButtonLabel.textContent = weaving ? 'RELEASE' : 'WEAVE';
+    ui.weaveButton.classList.toggle('is-cancel', weaving);
+    ui.weaveButton.setAttribute('aria-label', weaving ? 'Release and close the weave' : 'Begin weaving');
     const multiplier = 1 + state.comboStack * 0.25;
     ui.comboBadge.classList.toggle('is-hidden', state.comboStack <= 0 || state.mode === 'title');
     ui.comboValue.textContent = `×${multiplier.toFixed(2).replace(/0$/, '')}`;
@@ -2132,6 +2429,46 @@
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  function getGeometrySnapshot() {
+    const copyPoint = (point, extra = {}) => Object.freeze({ x: point.x, y: point.y, ...extra });
+    return Object.freeze({
+      profile: controlProfile,
+      orientation: viewportOrientation,
+      orientationBlocked,
+      player: copyPoint(state.player, { radius: PLAYER_RADIUS }),
+      anchors: Object.freeze(state.anchors.map((anchor) => copyPoint(anchor, {
+        id: anchor.id,
+        radius: anchor.radius,
+        guide: anchor.guide,
+        awakened: anchor.awakened
+      }))),
+      enemies: Object.freeze(state.enemies.map((enemy) => copyPoint(enemy, {
+        id: enemy.id,
+        type: enemy.type,
+        radius: enemy.radius,
+        dead: enemy.dead
+      })))
+    });
+  }
+
+  const qaHostAllowed = window.location.protocol === 'file:'
+    || ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
+
+  // Keep deterministic geometry inspectable for local regression tests without
+  // publishing a live-state inspection surface in production builds.
+  if (qaHostAllowed) {
+    window.__LUMENLOOM_QA__ = Object.freeze({
+      getControlProfile: () => controlProfile,
+      getPlayBounds: () => Object.freeze({ ...playBounds }),
+      getGeometrySnapshot,
+      resolveControlProfile,
+      calculatePlayBounds,
+      calculateTutorialLayout,
+      clampPointToBounds,
+      refreshLayout: () => resize()
+    });
+  }
+
   function frame(time) {
     const dt = Math.min(0.033, Math.max(0, (time - lastFrame) / 1000));
     lastFrame = time;
@@ -2141,8 +2478,6 @@
   }
 
   function setupQaControls() {
-    const qaHostAllowed = window.location.protocol === 'file:'
-      || ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
     if (!pageParams.has('qa') || !qaHostAllowed) return;
     const panel = document.createElement('aside');
     panel.setAttribute('aria-label', 'QA controls');
@@ -2186,13 +2521,35 @@
     document.body.appendChild(panel);
   }
 
-  window.addEventListener('resize', resize);
+  let resizeQueued = false;
+  function scheduleResize() {
+    if (resizeQueued) return;
+    resizeQueued = true;
+    requestAnimationFrame(() => {
+      resizeQueued = false;
+      resize();
+    });
+  }
+
+  window.addEventListener('resize', scheduleResize);
+  window.visualViewport?.addEventListener('resize', scheduleResize);
+  window.addEventListener('orientationchange', () => {
+    resetMobileStick();
+    scheduleResize();
+    window.setTimeout(scheduleResize, 120);
+  });
   window.addEventListener('blur', () => {
     input.keys.clear();
+    input.actionPointers.clear();
+    resetMobileStick();
     if (state.mode === 'playing' || state.mode === 'transition') pauseGame();
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && (state.mode === 'playing' || state.mode === 'transition')) pauseGame();
+    if (document.hidden) {
+      input.actionPointers.clear();
+      resetMobileStick();
+      if (state.mode === 'playing' || state.mode === 'transition') pauseGame();
+    }
   });
 
   window.addEventListener('keydown', (event) => {
@@ -2231,6 +2588,12 @@
     if (event.pointerType === 'mouse') input.pointerActive = false;
   });
   canvas.addEventListener('pointermove', (event) => {
+    if (isMobileProfile() && event.pointerType !== 'mouse') {
+      if (event.pointerId !== input.mobilePointerId) return;
+      event.preventDefault();
+      updateMobileStick(screenPoint(event));
+      return;
+    }
     const p = screenPoint(event);
     input.x = p.x;
     input.y = p.y;
@@ -2239,6 +2602,21 @@
   });
   canvas.addEventListener('pointerdown', (event) => {
     const p = screenPoint(event);
+    if (isMobileProfile() && event.pointerType !== 'mouse') {
+      if (input.mobilePointerId !== null || orientationBlocked) return;
+      event.preventDefault();
+      input.mobilePointerId = event.pointerId;
+      input.pointerType = event.pointerType;
+      input.pointerActive = true;
+      input.stickOriginX = p.x;
+      input.stickOriginY = p.y;
+      input.stickX = 0;
+      input.stickY = 0;
+      input.stickMagnitude = 0;
+      canvas.setPointerCapture?.(event.pointerId);
+      syncMobileStickVisual(true);
+      return;
+    }
     input.x = p.x;
     input.y = p.y;
     input.pointerType = event.pointerType;
@@ -2247,8 +2625,14 @@
     if (event.pointerType !== 'mouse') canvas.setPointerCapture?.(event.pointerId);
   });
   canvas.addEventListener('pointerup', (event) => {
+    if (isMobileProfile() && event.pointerType !== 'mouse') {
+      resetMobileStick(event.pointerId);
+      return;
+    }
     if (event.pointerType !== 'mouse') input.pointerActive = false;
   });
+  canvas.addEventListener('pointercancel', (event) => resetMobileStick(event.pointerId));
+  canvas.addEventListener('lostpointercapture', (event) => resetMobileStick(event.pointerId));
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   ui.playButton.addEventListener('click', startRun);
@@ -2261,7 +2645,29 @@
   });
   ui.pauseButton.addEventListener('click', pauseGame);
   ui.soundButton.addEventListener('click', () => audio.toggle());
-  ui.weaveButton.addEventListener('click', toggleWeave);
+  ui.weaveButton.addEventListener('pointerdown', (event) => {
+    if (!isMobileProfile() || event.pointerType === 'mouse' || orientationBlocked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    input.actionPointers.add(event.pointerId);
+    input.lastTouchActionAt = performance.now();
+    ui.weaveButton.setPointerCapture?.(event.pointerId);
+    toggleWeave();
+  });
+  const releaseActionPointer = (event) => input.actionPointers.delete(event.pointerId);
+  ui.weaveButton.addEventListener('pointerup', releaseActionPointer);
+  ui.weaveButton.addEventListener('pointercancel', releaseActionPointer);
+  ui.weaveButton.addEventListener('lostpointercapture', releaseActionPointer);
+  ui.weaveButton.addEventListener('click', (event) => {
+    const synthesizedTouchClick = isMobileProfile()
+      && event.detail !== 0
+      && performance.now() - input.lastTouchActionAt < 700;
+    if (synthesizedTouchClick) {
+      event.preventDefault();
+      return;
+    }
+    toggleWeave();
+  });
   ui.fullscreenButton.addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();

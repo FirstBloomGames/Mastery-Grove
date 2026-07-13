@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="profile-desktop" data-control-profile="desktop" data-orientation="landscape">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#09091d">
   <meta name="description" content="Lumenloom — weave light through a moonlit garden in this original arcade game from First Bloom Games.">
   <title>Lumenloom — A First Bloom Games Original</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.2">
   <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.1">
+  <meta name="first-bloom-release" content="0.4.0-rc.2">
 </head>
 <body>
   <main id="app" aria-label="Lumenloom game">
@@ -81,9 +81,21 @@
         <span><kbd>P</kbd> pause</span>
       </div>
 
-      <button id="weaveButton" class="weave-button" type="button">
+      <div id="mobileMoveZone" class="mobile-move-zone" aria-hidden="true">
+        <div class="mobile-move-guide">
+          <span class="mobile-move-star">&#10022;</span>
+        </div>
+        <div id="mobileStick" class="mobile-stick">
+          <span id="mobileStickKnob" class="mobile-stick-knob"></span>
+        </div>
+      </div>
+
+      <button id="weaveButton" class="weave-button" type="button" aria-label="Weave light">
         <span class="weave-icon" aria-hidden="true">✦</span>
-        <span id="weaveButtonLabel">WEAVE</span>
+        <span class="weave-copy">
+          <small>THREAD</small>
+          <span id="weaveButtonLabel">WEAVE</span>
+        </span>
       </button>
     </section>
 
@@ -102,7 +114,7 @@
         <p class="tagline">Weave the light. Wake the garden.</p>
         <p class="premise">The Hollow has swallowed every color before dawn. You are the last little loomwing—and light becomes real wherever your thread closes.</p>
 
-        <div class="how-to">
+        <div class="how-to how-to-desktop">
           <article>
             <span class="step-number">01</span>
             <div><strong>GLIDE</strong><small>Use WASD, arrows, or guide with your mouse.</small></div>
@@ -117,7 +129,23 @@
           </article>
         </div>
 
+        <div class="how-to how-to-mobile" aria-label="Touch controls">
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">&#8599;</span>
+            <div><strong>GLIDE</strong><small>Drag anywhere</small></div>
+          </article>
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">&#10022;</span>
+            <div><strong>WEAVE</strong><small>Tap by a bloom</small></div>
+          </article>
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">3+</span>
+            <div><strong>SEAL</strong><small>Return to gold</small></div>
+          </article>
+        </div>
+
         <button id="playButton" class="primary-button" type="button">
+          <span class="mobile-button-copy">BEGIN</span>
           <span>ENTER THE NIGHT GARDEN</span><i aria-hidden="true">→</i>
         </button>
         <div class="start-footer">
@@ -172,10 +200,10 @@
 
     <div id="rotateNotice" class="rotate-notice">
       <span aria-hidden="true">↻</span>
-      <strong>Turn your device</strong>
-      <small>Lumenloom blooms best in landscape.</small>
+      <strong>Turn upright</strong>
+      <small>Lumenloom blooms in portrait.</small>
     </div>
   </main>
-  <script src="game.js"></script>
+  <script src="game.js?v=0.4.0-rc.2"></script>
 </body>
 </html>
