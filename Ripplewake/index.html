@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06121d">
+  <meta name="description" content="Ripplewake — skip moonstones across a living lake and bloom the water with every perfect touch.">
+  <title>Ripplewake — A First Bloom Games Original</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+  <meta name="first-bloom-release" content="0.4.0-rc.1">
+</head>
+<body>
+  <main id="app" aria-label="Ripplewake game">
+    <canvas id="lakeCanvas" tabindex="0" aria-label="Ripplewake playfield. Point or touch the lake to throw, then tap when the pulse reaches each landing ripple. One missed beat continues for zero points; two consecutive missed beats sink the stone."></canvas>
+    <div class="water-veil" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <section id="hud" class="hud is-hidden" aria-label="Game status">
+      <div class="hud-top">
+        <div class="stone-card glass">
+          <span class="eyebrow">CURRENT CAST</span>
+          <strong id="stoneName">FIRST STONE</strong>
+          <small id="stoneCount">1 / 5</small>
+        </div>
+
+        <div class="score-card">
+          <span class="eyebrow">WAKE SCORE</span>
+          <strong id="scoreValue">0</strong>
+          <small id="bestValue">BEST 0</small>
+        </div>
+
+        <div class="hud-actions glass">
+          <button id="soundButton" class="icon-button" type="button" aria-label="Mute sound" title="Mute sound (M)"><span id="soundIcon" aria-hidden="true">♪</span></button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" title="Enter fullscreen"><span aria-hidden="true">⛶</span></button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" title="Pause (P)"><span aria-hidden="true">Ⅱ</span></button>
+        </div>
+      </div>
+
+      <div id="guideCard" class="guide-card glass">
+        <span class="guide-ring" aria-hidden="true"></span>
+        <div>
+          <span id="guideKicker" class="eyebrow">YOUR FIRST THROW</span>
+          <strong id="guideText">TAP FAR ACROSS THE WATER TO AIM</strong>
+        </div>
+      </div>
+
+      <div class="wake-stats glass">
+        <div><span>SKIPS</span><strong id="skipValue">0</strong></div>
+        <div><span>PERFECT</span><strong id="perfectValue">0</strong></div>
+        <div><span>RINGS</span><strong id="lilyValue">0</strong></div>
+      </div>
+
+      <div id="comboBadge" class="combo-badge is-hidden" aria-live="polite">
+        <strong id="comboValue">×1.0</strong>
+        <small>RIPPLE CHAIN</small>
+      </div>
+
+      <div id="currentBadge" class="current-badge glass">
+        <span class="eyebrow">CURRENT</span>
+        <strong id="currentName">STILLWATER</strong>
+      </div>
+
+      <div id="actionPrompt" class="action-prompt glass" aria-live="polite">
+        <span class="prompt-pulse" aria-hidden="true"></span>
+        <strong id="promptText">TAP THE LAKE TO THROW</strong>
+        <small id="promptHint">Direction sets the first wake</small>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="screenFlash" class="screen-flash" aria-hidden="true"></div>
+
+    <section id="startOverlay" class="overlay is-visible" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+      <div class="start-panel ornate-panel">
+        <div class="studio-mark"><span aria-hidden="true">≋</span> FIRST BLOOM GAMES ORIGINAL</div>
+        <h1 id="startTitle">RIPPLE<span>WAKE</span></h1>
+        <p class="tagline">Touch the water. Teach it to bloom.</p>
+        <p class="premise">Five moonstones. One living lake. Touch each arriving ripple to carry the stone farther. One missed beat fades onward for zero points; two in a row sink the stone.</p>
+
+        <div class="how-to">
+          <article>
+            <span class="step-number">01</span>
+            <div><strong>AIM</strong><small>Tap far across the lake. No dragging required.</small></div>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <div><strong>KISS</strong><small>Tap when the pulse meets the ripple. One silent beat fades; two sink the stone.</small></div>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <div><strong>BLOOM</strong><small>Guide perfect skips through rings and golden reflections.</small></div>
+          </article>
+        </div>
+
+        <button id="playButton" class="primary-button" type="button"><span>CAST THE FIRST STONE</span><i aria-hidden="true">→</i></button>
+        <div class="start-footer">
+          <span id="startBest">PERSONAL BEST · 0</span>
+          <span>TYPICAL RUN: 70–75 SECONDS · TOUCH, CLICK, OR SPACE</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pause-panel ornate-panel">
+        <span class="panel-symbol" aria-hidden="true">◉</span>
+        <span class="eyebrow">THE LAKE IS HOLDING ITS BREATH</span>
+        <h2 id="pauseTitle">The wake is waiting.</h2>
+        <p>Your stone and every open ripple will remain exactly where you left them.</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>RETURN TO THE WATER</span><i aria-hidden="true">→</i></button>
+        <button id="quitButton" class="text-button" type="button">End this wake</button>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+      <div class="result-panel ornate-panel">
+        <span class="result-symbol" aria-hidden="true">✺</span>
+        <span class="eyebrow">THE LAKE REMEMBERS</span>
+        <h2 id="resultTitle">Your wake became a garden.</h2>
+        <p id="wakeName" class="wake-name">THE QUIET CONSTELLATION</p>
+        <p id="resultCopy" class="result-copy">Every landing left a ring of light behind it.</p>
+        <div class="result-stats">
+          <article><span>SCORE</span><strong id="resultScore">0</strong></article>
+          <article><span>RANK</span><strong id="resultRank">PEBBLE</strong></article>
+          <article><span>SKIPS</span><strong id="resultSkips">0</strong></article>
+          <article><span>PERFECT</span><strong id="resultPerfects">0</strong></article>
+          <article><span>RINGS</span><strong id="resultLilies">0</strong></article>
+        </div>
+        <div class="result-best"><span>PERSONAL BEST</span><strong id="resultBest">0</strong></div>
+        <button id="replayButton" class="primary-button" type="button"><span>CAST ANOTHER WAKE</span><i aria-hidden="true">↻</i></button>
+        <button id="homeButton" class="text-button" type="button">Return to title</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="rules.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

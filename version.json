@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "First Bloom: The Mastery Grove",
+  "version": "0.4.0-rc.1",
+  "channel": "release-candidate",
+  "entrypoint": "index.html",
+  "canonicalEntry": "MasteryGrove/index.html",
+  "games": [
+    "Lumenloom",
+    "Bloomfold",
+    "Ripplewake",
+    "Prismbind"
+  ],
+  "reviewGates": [
+    "privacy-owner-and-legal-review",
+    "credits-and-rights-owner-review",
+    "target-platform-technical-review",
+    "uncoached-release-candidate-playtest"
+  ]
+}
