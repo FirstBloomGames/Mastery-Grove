@@ -150,14 +150,37 @@
 
   const canvas = $('groveCanvas');
   const ctx = canvas.getContext('2d');
-  const view = { width: 0, height: 0, dpr: 1, time: 0 };
+  const view = {
+    width: 0,
+    height: 0,
+    dpr: 1,
+    time: 0,
+    mobileRenderer: false,
+    frameInterval: 1000 / 45,
+    effectsScale: 1
+  };
   const rendererState = {
     fireflies: [],
     stars: [],
     growthPulse: 0,
     growthPulseColor: '#82f4ee',
-    breeze: 0
+    breeze: 0,
+    lastRenderAt: 0,
+    interactionQuietUntil: 0
   };
+  const rendererMetrics = {
+    startedAt: performance.now(),
+    draws: 0,
+    skipped: 0,
+    modelBuilds: 0,
+    lastDrawMs: 0,
+    totalDrawMs: 0,
+    longestDrawMs: 0,
+    lastQaPublishAt: 0,
+    lastQaState: ''
+  };
+  const qaHostAllowed = location.protocol === 'file:'
+    || ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
 
   let storageAvailable = true;
   let storageReadOnly = false;
@@ -177,6 +200,11 @@
   const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let reducedMotion = Boolean(motionQuery?.matches);
   let lastFrame = performance.now();
+  let rendererFrameId = 0;
+  let rendererTimerId = 0;
+  let resizeTimerId = 0;
+  let renderModelProfile = null;
+  let renderModel = null;
 
   function safeInteger(value) {
     const number = Number(value);
@@ -311,6 +339,31 @@
     return progression.foundationalMarks(profile);
   }
 
+  function groveRenderModel() {
+    if (renderModelProfile === profile && renderModel) return renderModel;
+    const lumenGrowth = growthFor('lumenloom');
+    const bloomGrowth = growthFor('bloomfold');
+    const rippleGrowth = growthFor('ripplewake');
+    const marks = lumenGrowth.level + bloomGrowth.level + rippleGrowth.level;
+    renderModel = Object.freeze({
+      lumenGrowth,
+      bloomGrowth,
+      rippleGrowth,
+      marks,
+      // Preserve the shipping First Tree scale. Prismbind's Guardian crown is
+      // layered separately, so this denominator intentionally remains tied to
+      // the complete registered game set rather than changing visual growth in
+      // a performance-only hotfix.
+      overallGrowth: (lumenGrowth.progress + bloomGrowth.progress + rippleGrowth.progress) / (GAME_IDS.length * 100),
+      guardianUnlocked: Boolean(profile?.unlocks?.tree04),
+      guardianAwakened: Boolean(profile?.regions?.secondGroveUnlocked),
+      secondGroveRevealed: Boolean(profile?.regions?.trees05To07Revealed)
+    });
+    renderModelProfile = profile;
+    rendererMetrics.modelBuilds += 1;
+    return renderModel;
+  }
+
   function groveRankFor(marks) {
     return progression.groveRankForMarks(marks);
   }
@@ -436,13 +489,16 @@
   function lumenloomPlatformProfile() {
     const forcedProfile = new URLSearchParams(location.search).get('profile');
     if (forcedProfile === 'mobile' || forcedProfile === 'desktop') return forcedProfile;
+    return isLikelyMobileRenderer() ? 'mobile' : 'desktop';
+  }
 
+  function isLikelyMobileRenderer() {
     const coarsePointer = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
     const noHover = Boolean(window.matchMedia?.('(hover: none)')?.matches);
     const touchDevice = Number(navigator.maxTouchPoints || 0) > 0;
     const viewportLooksHandheld = Math.min(window.innerWidth, window.innerHeight) <= 600
       && Math.max(window.innerWidth, window.innerHeight) <= 1000;
-    return coarsePointer || noHover || touchDevice || viewportLooksHandheld ? 'mobile' : 'desktop';
+    return coarsePointer || noHover || touchDevice || viewportLooksHandheld;
   }
 
   function openGame(gameId) {
@@ -520,6 +576,7 @@
     activeGameId = null;
     activeSession = null;
     activeSessionId = null;
+    restartRenderer(true);
 
     if (options.cancelTrial && trialSession?.active) {
       trialSession = null;
@@ -955,6 +1012,7 @@
     overlay.setAttribute('aria-hidden', String(!visible));
     overlay.inert = !visible;
     syncModalState();
+    restartRenderer(!visible);
   }
 
   function trapModalFocus(event) {
@@ -981,15 +1039,45 @@
   }
 
   function resizeCanvas() {
-    view.width = window.innerWidth;
-    view.height = window.innerHeight;
-    view.dpr = Math.min(window.devicePixelRatio || 1, 1.7);
-    if (!ctx) return;
-    canvas.width = Math.max(1, Math.floor(view.width * view.dpr));
-    canvas.height = Math.max(1, Math.floor(view.height * view.dpr));
-    canvas.style.width = `${view.width}px`;
-    canvas.style.height = `${view.height}px`;
+    const width = Math.max(1, window.innerWidth);
+    const height = Math.max(1, window.innerHeight);
+    const mobileRenderer = isLikelyMobileRenderer();
+    const dprLimit = mobileRenderer ? 1.25 : 1.6;
+    const pixelBudget = mobileRenderer ? 550000 : 2200000;
+    const budgetDpr = Math.sqrt(pixelBudget / Math.max(1, width * height));
+    const dpr = Math.max(.75, Math.min(window.devicePixelRatio || 1, dprLimit, budgetDpr));
+    const unchanged = view.width === width
+      && view.height === height
+      && Math.abs(view.dpr - dpr) < .01
+      && view.mobileRenderer === mobileRenderer;
+
+    view.width = width;
+    view.height = height;
+    view.dpr = dpr;
+    view.mobileRenderer = mobileRenderer;
+    view.frameInterval = mobileRenderer ? 1000 / 24 : 1000 / 45;
+    view.effectsScale = mobileRenderer ? .62 : 1;
+    canvas.dataset.rendererProfile = mobileRenderer ? 'mobile-balanced' : 'desktop-balanced';
+    canvas.dataset.rendererDpr = dpr.toFixed(3);
+    canvas.dataset.rendererTargetFps = String(Math.round(1000 / view.frameInterval));
+    canvas.dataset.rendererFrameIntervalMs = view.frameInterval.toFixed(2);
+    canvas.dataset.rendererEffectsScale = view.effectsScale.toFixed(2);
+    if (!ctx || unchanged) return false;
+    canvas.width = Math.max(1, Math.floor(width * dpr));
+    canvas.height = Math.max(1, Math.floor(height * dpr));
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
     seedAtmosphere();
+    rendererState.lastRenderAt = 0;
+    return true;
+  }
+
+  function queueCanvasResize() {
+    clearTimeout(resizeTimerId);
+    resizeTimerId = window.setTimeout(() => {
+      resizeTimerId = 0;
+      if (resizeCanvas()) restartRenderer(true);
+    }, view.mobileRenderer ? 120 : 60);
   }
 
   function seededRandom(seed) {
@@ -1006,13 +1094,15 @@
   function seedAtmosphere() {
     const random = seededRandom(0xF1B1007);
     const fireflyPalette = ['#ffd773', '#82f4ee', '#ff9b85'];
-    rendererState.stars = Array.from({ length: Math.min(160, Math.round(view.width * view.height / 8500)) }, () => ({
+    const starLimit = view.mobileRenderer ? 64 : 160;
+    const fireflyCount = view.mobileRenderer ? 16 : 24;
+    rendererState.stars = Array.from({ length: Math.min(starLimit, Math.round(view.width * view.height / 8500)) }, () => ({
       x: random() * view.width,
       y: random() * view.height * .72,
       size: .35 + random() * 1.2,
       phase: random() * TAU
     }));
-    rendererState.fireflies = Array.from({ length: 24 }, () => ({
+    rendererState.fireflies = Array.from({ length: fireflyCount }, () => ({
       x: random() * view.width,
       y: view.height * (.28 + random() * .58),
       speed: .18 + random() * .45,
@@ -1070,6 +1160,7 @@
   }
 
   function drawGround() {
+    const model = groveRenderModel();
     const horizon = view.height * .72;
     const ground = ctx.createLinearGradient(0, horizon, 0, view.height);
     ground.addColorStop(0, 'rgba(15,35,39,.35)');
@@ -1090,7 +1181,7 @@
     ctx.fillStyle = path;
     ctx.fillRect(0, horizon, view.width, view.height - horizon);
 
-    if (profile?.regions?.trees05To07Revealed) {
+    if (model.secondGroveRevealed) {
       ctx.save();
       const clearingX = view.width * .83;
       const clearingY = horizon * .98;
@@ -1112,14 +1203,13 @@
   }
 
   function drawFirstTree() {
-    const lumenGrowth = growthFor('lumenloom');
-    const bloomGrowth = growthFor('bloomfold');
-    const rippleGrowth = growthFor('ripplewake');
+    const model = groveRenderModel();
+    const { lumenGrowth, bloomGrowth, rippleGrowth } = model;
     const lumenLevel = lumenGrowth.level;
     const bloomLevel = bloomGrowth.level;
     const rippleLevel = rippleGrowth.level;
-    const marks = combinedMarks();
-    const overallGrowth = (lumenGrowth.progress + bloomGrowth.progress + rippleGrowth.progress) / (GAME_IDS.length * 100);
+    const marks = model.marks;
+    const overallGrowth = model.overallGrowth;
     const centerX = view.width * .5;
     const baseY = view.height * .74;
     const scale = Math.min(view.width, view.height);
@@ -1140,7 +1230,7 @@
     drawRoots(centerX, baseY, scale, Math.round(overallGrowth * 7));
 
     ctx.shadowColor = 'rgba(130,244,238,.16)';
-    ctx.shadowBlur = 12 + overallGrowth * 20;
+    ctx.shadowBlur = (12 + overallGrowth * 20) * view.effectsScale;
     ctx.strokeStyle = '#372b3c';
     ctx.lineWidth = Math.max(8, scale * .022);
     ctx.beginPath();
@@ -1178,14 +1268,14 @@
     drawCanopyDetails(crownEndpoints, rippleLevel, '#ff9b85', 'ripple');
 
     if (marks >= 4) drawSharedCanopy(centerX, trunkTopY, scale, marks);
-    drawGuardianCrown(centerX, trunkTopY - scale * .012, scale);
+    drawGuardianCrown(centerX, trunkTopY - scale * .012, scale, model);
     ctx.restore();
   }
 
-  function drawGuardianCrown(x, y, scale) {
-    const unlocked = Boolean(profile?.unlocks?.tree04);
-    const awakened = Boolean(profile?.regions?.secondGroveUnlocked);
-    if (!unlocked && combinedMarks() < 10) return;
+  function drawGuardianCrown(x, y, scale, model) {
+    const unlocked = model.guardianUnlocked;
+    const awakened = model.guardianAwakened;
+    if (!unlocked && model.marks < 10) return;
 
     const strength = awakened ? 1 : unlocked ? .66 : .18;
     const radius = scale * (awakened ? .042 : .034);
@@ -1200,7 +1290,7 @@
       ctx.rotate(view.time * (awakened ? .08 : .025) * (index % 2 ? -1 : 1) + index * TAU / 3);
       ctx.strokeStyle = colors[index];
       ctx.shadowColor = colors[index];
-      ctx.shadowBlur = awakened ? 14 : 7;
+      ctx.shadowBlur = (awakened ? 14 : 7) * view.effectsScale;
       ctx.beginPath();
       ctx.ellipse(0, 0, radius * 1.55, radius * .48, index * .34, 0, TAU);
       ctx.stroke();
@@ -1210,7 +1300,7 @@
     ctx.rotate(Math.PI / 4);
     ctx.fillStyle = awakened ? '#eee7ff' : 'rgba(215,198,255,.72)';
     ctx.shadowColor = '#b89aff';
-    ctx.shadowBlur = awakened ? 26 : 12;
+    ctx.shadowBlur = (awakened ? 26 : 12) * view.effectsScale;
     ctx.fillRect(-radius * .18, -radius * .18, radius * .36, radius * .36);
     if (awakened) {
       ctx.rotate(-Math.PI / 4);
@@ -1253,7 +1343,7 @@
     ctx.strokeStyle = wood;
     ctx.lineWidth = Math.max(.8, width * (.55 + stage * .45));
     ctx.shadowColor = accent;
-    ctx.shadowBlur = growth > .7 ? 4 : 0;
+    ctx.shadowBlur = growth > .7 ? 4 * view.effectsScale : 0;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.quadraticCurveTo(controlX, controlY, endX, endY);
@@ -1300,7 +1390,7 @@
       ctx.translate(point.x, point.y);
       ctx.globalCompositeOperation = 'lighter';
       ctx.shadowColor = color;
-      ctx.shadowBlur = 11 + level * 2;
+      ctx.shadowBlur = (11 + level * 2) * view.effectsScale;
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       if (type === 'fractal') {
@@ -1365,7 +1455,7 @@
       ctx.fillStyle = firefly.color;
       ctx.globalAlpha = alpha;
       ctx.shadowColor = firefly.color;
-      ctx.shadowBlur = 9;
+      ctx.shadowBlur = 9 * view.effectsScale;
       ctx.beginPath();
       ctx.arc(x, y, 1.2, 0, TAU);
       ctx.fill();
@@ -1382,18 +1472,119 @@
     ctx.strokeStyle = rendererState.growthPulseColor;
     ctx.lineWidth = 2;
     ctx.shadowColor = ctx.strokeStyle;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 18 * view.effectsScale;
     ctx.beginPath();
     ctx.arc(view.width * .5, view.height * .62, radius, 0, TAU);
     ctx.stroke();
     ctx.restore();
   }
 
+  function scheduleRenderer(delay = 0) {
+    if (rendererFrameId || rendererTimerId) return;
+    if (delay > 0) {
+      rendererTimerId = window.setTimeout(() => {
+        rendererTimerId = 0;
+        rendererFrameId = requestAnimationFrame(frame);
+      }, delay);
+      return;
+    }
+    rendererFrameId = requestAnimationFrame(frame);
+  }
+
+  function restartRenderer(forceDraw = false) {
+    if (rendererTimerId) clearTimeout(rendererTimerId);
+    if (rendererFrameId) cancelAnimationFrame(rendererFrameId);
+    rendererTimerId = 0;
+    rendererFrameId = 0;
+    lastFrame = performance.now();
+    if (forceDraw) rendererState.lastRenderAt = 0;
+    scheduleRenderer(document.hidden ? 1000 : 0);
+  }
+
+  function quietRendererFor(duration = 180) {
+    if (!view.mobileRenderer || activeGameId) return;
+    rendererState.interactionQuietUntil = Math.max(
+      rendererState.interactionQuietUntil,
+      performance.now() + duration
+    );
+  }
+
+  function rendererSnapshot() {
+    const now = performance.now();
+    const sampleSeconds = Math.max(.001, (now - rendererMetrics.startedAt) / 1000);
+    const modalOpen = document.body.classList.contains('modal-open');
+    return Object.freeze({
+      mobileRenderer: view.mobileRenderer,
+      cssSize: Object.freeze({ width: view.width, height: view.height }),
+      backingSize: Object.freeze({ width: canvas.width, height: canvas.height }),
+      backingPixels: canvas.width * canvas.height,
+      dpr: Number(view.dpr.toFixed(3)),
+      targetFps: Math.round(1000 / view.frameInterval),
+      effectiveDrawFps: Number((rendererMetrics.draws / sampleSeconds).toFixed(2)),
+      draws: rendererMetrics.draws,
+      skipped: rendererMetrics.skipped,
+      modelBuilds: rendererMetrics.modelBuilds,
+      lastDrawMs: Number(rendererMetrics.lastDrawMs.toFixed(2)),
+      averageDrawMs: Number((rendererMetrics.totalDrawMs / Math.max(1, rendererMetrics.draws)).toFixed(2)),
+      longestDrawMs: Number(rendererMetrics.longestDrawMs.toFixed(2)),
+      profileModelCached: renderModelProfile === profile,
+      suspended: Object.freeze({
+        hidden: document.hidden,
+        gameOpen: Boolean(activeGameId),
+        modalOpen,
+        interaction: now < rendererState.interactionQuietUntil
+      })
+    });
+  }
+
+  function resetRendererMetrics() {
+    rendererMetrics.startedAt = performance.now();
+    rendererMetrics.draws = 0;
+    rendererMetrics.skipped = 0;
+    rendererMetrics.modelBuilds = 0;
+    rendererMetrics.lastDrawMs = 0;
+    rendererMetrics.totalDrawMs = 0;
+    rendererMetrics.longestDrawMs = 0;
+    rendererMetrics.lastQaPublishAt = 0;
+  }
+
+  function publishRendererQa(now, state) {
+    if (!qaHostAllowed) return;
+    if (state === rendererMetrics.lastQaState && now - rendererMetrics.lastQaPublishAt < 500) return;
+    const sampleSeconds = Math.max(.001, (now - rendererMetrics.startedAt) / 1000);
+    canvas.dataset.rendererState = state;
+    canvas.dataset.rendererDrawCount = String(rendererMetrics.draws);
+    canvas.dataset.rendererEffectiveFps = (rendererMetrics.draws / sampleSeconds).toFixed(2);
+    canvas.dataset.rendererLastDrawMs = rendererMetrics.lastDrawMs.toFixed(2);
+    rendererMetrics.lastQaState = state;
+    rendererMetrics.lastQaPublishAt = now;
+  }
+
   function frame(now) {
+    rendererFrameId = 0;
     const elapsed = Math.min(.25, Math.max(0, (now - lastFrame) / 1000));
-    const dt = reducedMotion ? 0 : Math.min(.033, elapsed);
     lastFrame = now;
-    if (!activeGameId) drawGrove(dt);
+    const modalOpen = document.body.classList.contains('modal-open');
+    const interactionPaused = view.mobileRenderer && now < rendererState.interactionQuietUntil;
+    const animationPaused = activeGameId || document.hidden || interactionPaused
+      || (modalOpen && rendererState.lastRenderAt > 0);
+    if (!animationPaused) {
+      const renderInterval = reducedMotion ? 250 : view.frameInterval;
+      const timeSinceRender = rendererState.lastRenderAt ? now - rendererState.lastRenderAt : renderInterval;
+      if (timeSinceRender >= renderInterval - 1) {
+        const dt = reducedMotion ? 0 : Math.min(.05, timeSinceRender / 1000);
+        const drawStartedAt = performance.now();
+        drawGrove(dt);
+        const drawMs = performance.now() - drawStartedAt;
+        rendererMetrics.draws += 1;
+        rendererMetrics.lastDrawMs = drawMs;
+        rendererMetrics.totalDrawMs += drawMs;
+        rendererMetrics.longestDrawMs = Math.max(rendererMetrics.longestDrawMs, drawMs);
+        rendererState.lastRenderAt = now;
+      }
+    } else {
+      rendererMetrics.skipped += 1;
+    }
     if (toastTimer > 0) {
       toastTimer -= elapsed;
       if (toastTimer <= 0) ui.groveToast.classList.remove('is-visible');
@@ -1405,8 +1596,23 @@
         ui.resetProgressButton.textContent = 'Reset all local progress';
       }
     }
-    if (reducedMotion) window.setTimeout(() => requestAnimationFrame(frame), 250);
-    else requestAnimationFrame(frame);
+    const qaState = document.hidden
+      ? 'hidden'
+      : activeGameId
+        ? 'game-open'
+        : interactionPaused
+          ? 'interaction'
+          : modalOpen
+            ? 'modal'
+            : 'rendering';
+    publishRendererQa(now, qaState);
+    const nextInterval = animationPaused
+      ? 500
+      : reducedMotion
+        ? 250
+        : view.frameInterval;
+    const workTime = Math.max(0, performance.now() - now);
+    scheduleRenderer(Math.max(4, nextInterval - workTime));
   }
 
   document.querySelectorAll('[data-play]').forEach((button) => {
@@ -1490,12 +1696,14 @@
     }
   });
 
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', queueCanvasResize, { passive: true });
+  window.addEventListener('scroll', () => quietRendererFor(180), { passive: true });
+  ui.groveScreen.addEventListener('pointerdown', () => quietRendererFor(140), { passive: true, capture: true });
+  document.addEventListener('visibilitychange', () => restartRenderer(!document.hidden));
   motionQuery?.addEventListener?.('change', (event) => {
     reducedMotion = event.matches;
     rendererState.growthPulse = reducedMotion ? 0 : rendererState.growthPulse;
-    lastFrame = performance.now();
-    if (!activeGameId) drawGrove(0);
+    restartRenderer(true);
   });
   saveProfile({ timestamp: false });
   enqueuePersistentRewards();
@@ -1511,5 +1719,11 @@
   }
   else setTimeout(() => ui.enterGroveButton.focus(), 100);
   syncModalState();
-  requestAnimationFrame(frame);
+  if (qaHostAllowed) {
+    window.__MASTERY_GROVE_QA__ = Object.freeze({
+      getRendererSnapshot: rendererSnapshot,
+      resetRendererMetrics
+    });
+  }
+  scheduleRenderer();
 })();

@@ -1,6 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.3**
+Current build: **0.4.0-rc.4**
+
+This hotfix addresses real-phone lag in the Mastery Grove selection screen. Mobile now uses a bounded canvas pixel budget and 24 FPS ambient scheduler, suspends decorative drawing during touch/scroll, hidden, modal, and active-game states, removes live mobile backdrop blur and animated grain, reduces paint-heavy effects, and skips offscreen card rendering. Desktop retains the full visual treatment. A dedicated performance contract prevents these budgets from regressing.
 
 This candidate completes Lumenloom's portrait-mobile release pass and Garden Awakening spectacle. It adds relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding from Mastery Grove. The garden now carries five distinct night atmospheres, shape-backed target guidance, layered luminous thread and knots, persistent capped awakening marks, closure bloom waves, a responsive Hollow Guardian, and staged dawn. Mastery Grove also quiets its game bar during active play while preserving a clear 44px return control. Desktop and mobile share the same gameplay rules, scoring, progression, results, saves, and Grove protocol.
 
