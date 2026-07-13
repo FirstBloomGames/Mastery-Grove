@@ -69,8 +69,45 @@
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   const lerp = (a, b, t) => a + (b - a) * t;
   const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const formatNumber = (n) => Math.round(n).toLocaleString('en-US');
+
+  const PHASE_ATMOSPHERES = Object.freeze([
+    'first-stitch',
+    'murmurs',
+    'hunger',
+    'crosswind',
+    'hollow'
+  ]);
+  const VISUAL_BUDGETS = Object.freeze({
+    desktop: Object.freeze({
+      normal: Object.freeze({ awakeningMarks: 24, closureWaves: 5, atmosphereMotifs: 18, threadGlints: 7, trailParticles: 420 }),
+      reduced: Object.freeze({ awakeningMarks: 16, closureWaves: 3, atmosphereMotifs: 8, threadGlints: 0, trailParticles: 120 })
+    }),
+    mobile: Object.freeze({
+      normal: Object.freeze({ awakeningMarks: 16, closureWaves: 4, atmosphereMotifs: 11, threadGlints: 4, trailParticles: 260 }),
+      reduced: Object.freeze({ awakeningMarks: 12, closureWaves: 2, atmosphereMotifs: 6, threadGlints: 0, trailParticles: 90 })
+    })
+  });
+  const VISUAL_CONSTANTS = Object.freeze({
+    canon: 'D-023',
+    phaseAtmospheres: PHASE_ATMOSPHERES,
+    budgets: VISUAL_BUDGETS,
+    awakeningCap: 24,
+    cosmeticIsolation: 'dedicated-cosmetic-rng-and-deterministic-render-hash',
+    reducedMotion: Object.freeze({
+      cameraPulse: 0,
+      threadTrails: 0,
+      closureWave: 'static-contained-radiance',
+      atmosphere: 'static-composition'
+    })
+  });
+
+  function hash01(value) {
+    const x = Math.sin(Number(value) * 12.9898 + 78.233) * 43758.5453123;
+    return x - Math.floor(x);
+  }
 
   function mulberry32(seed) {
     return function random() {
@@ -86,7 +123,24 @@
   let DPR = 1;
   let lastFrame = performance.now();
   let nextId = 1;
-  let random = mulberry32(Date.now() >>> 0);
+  let gameplayRandomSource = mulberry32(Date.now() >>> 0);
+  let cosmeticRandomSource = mulberry32((Date.now() ^ 0x9E3779B9) >>> 0);
+  let gameplayRandomCalls = 0;
+  let cosmeticRandomCalls = 0;
+  const random = () => {
+    gameplayRandomCalls++;
+    return gameplayRandomSource();
+  };
+  const cosmeticRandom = () => {
+    cosmeticRandomCalls++;
+    return cosmeticRandomSource();
+  };
+  function seedRunRandom(seed) {
+    gameplayRandomSource = mulberry32(seed >>> 0);
+    cosmeticRandomSource = mulberry32((seed ^ 0x9E3779B9) >>> 0);
+    gameplayRandomCalls = 0;
+    cosmeticRandomCalls = 0;
+  }
   const PLAYER_RADIUS = 18;
   const ANCHOR_RADIUS = 27;
   const profileOverride = ['mobile', 'desktop'].includes(pageParams.get('profile')) ? pageParams.get('profile') : '';
@@ -324,6 +378,8 @@
     anchors: [],
     enemies: [],
     regions: [],
+    closureWaves: [],
+    awakeningMarks: [],
     wildBlooms: [],
     particles: [],
     floaters: [],
@@ -445,7 +501,7 @@
       const length = Math.max(1, Math.floor(this.context.sampleRate * duration));
       const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
       const data = buffer.getChannelData(0);
-      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+      for (let i = 0; i < length; i++) data[i] = (cosmeticRandom() * 2 - 1) * (1 - i / length);
       const source = this.context.createBufferSource();
       const gain = this.context.createGain();
       const filter = this.context.createBiquadFilter();
@@ -500,6 +556,12 @@
   }
 
   const audio = new AudioGarden();
+
+  function mobileHaptic(pattern) {
+    if (!isMobileProfile() || reducedMotion || typeof navigator.vibrate !== 'function') return;
+    try { navigator.vibrate(pattern); }
+    catch (_) { /* Vibration is an optional, capability-gated enhancement. */ }
+  }
 
   function postToGrove(type, payload = {}) {
     if (!isEmbedded) return;
@@ -594,6 +656,11 @@
 
   function isMobileProfile() {
     return controlProfile === 'mobile-portrait';
+  }
+
+  function getVisualBudget() {
+    const profile = isMobileProfile() ? 'mobile' : 'desktop';
+    return VISUAL_BUDGETS[profile][reducedMotion ? 'reduced' : 'normal'];
   }
 
   function setStyleProperty(element, name, value) {
@@ -735,6 +802,12 @@
       state.anchors.forEach((anchor) => remapPoint(anchor, oldBounds, playBounds));
       state.enemies.forEach((enemy) => remapPoint(enemy, oldBounds, playBounds));
       state.wildBlooms.forEach((bloom) => remapPoint(bloom, oldBounds, playBounds));
+      state.awakeningMarks.forEach((mark) => remapPoint(mark, oldBounds, playBounds));
+      state.closureWaves.forEach((wave) => {
+        remapPoint(wave, oldBounds, playBounds);
+        wave.points.forEach((point) => remapPoint(point, oldBounds, playBounds));
+        wave.radius *= Math.min(sx, sy);
+      });
       state.particles.forEach(scalePoint);
       state.floaters.forEach(scalePoint);
       state.regions.forEach((region) => region.points.forEach((point) => remapPoint(point, oldBounds, playBounds)));
@@ -793,7 +866,8 @@
         baseY: rng() * H,
         phase: rng() * TAU,
         speed: 0.25 + rng() * 0.55,
-        radius: 0.7 + rng() * 1.7
+        radius: 0.7 + rng() * 1.7,
+        color: rng() > 0.7 ? '#73e8d2' : '#ffd977'
       });
     }
   }
@@ -802,7 +876,7 @@
     if (isTrialRun && state.mode === 'result') return;
     audio.init();
     resetMobileStick();
-    random = mulberry32((Date.now() ^ Math.round(performance.now() * 1000)) >>> 0);
+    seedRunRandom((Date.now() ^ Math.round(performance.now() * 1000)) >>> 0);
     state.mode = 'playing';
     postToGrove('run-start');
     state.previousMode = 'playing';
@@ -818,6 +892,8 @@
     state.anchors = [];
     state.enemies = [];
     state.regions = [];
+    state.closureWaves = [];
+    state.awakeningMarks = [];
     state.wildBlooms = [];
     state.particles = [];
     state.floaters = [];
@@ -842,7 +918,7 @@
   function beginPhase(index) {
     if (state.anchors.length) {
       state.anchors.filter((a) => a.awakened).forEach((a) => {
-        state.wildBlooms.push({ x: a.x, y: a.y, hue: a.hue, size: 0.7 + random() * 0.45, age: 10 });
+        state.wildBlooms.push({ x: a.x, y: a.y, hue: a.hue, size: 0.7 + cosmeticRandom() * 0.45, age: 10 });
       });
     }
 
@@ -918,8 +994,8 @@
       touchCooldown: 0,
       awakened: false,
       bloom: 0,
-      hue: 162 + Math.round(random() * 150),
-      phase: random() * TAU
+      hue: 162 + Math.round(cosmeticRandom() * 150),
+      phase: cosmeticRandom() * TAU
     };
   }
 
@@ -1134,13 +1210,14 @@
     if (p.y < playBounds.top) { p.y = playBounds.top; p.vy = Math.abs(p.vy) * 0.35; }
     if (p.y > playBounds.bottom) { p.y = playBounds.bottom; p.vy = -Math.abs(p.vy) * 0.35; }
 
-    if (speed > 65 && random() < dt * 18) {
+    const trailRate = reducedMotion ? 4 : isMobileProfile() ? 11 : 18;
+    if (speed > 65 && cosmeticRandom() < dt * trailRate) {
       addParticle(p.x - Math.cos(p.facing) * 13, p.y - Math.sin(p.facing) * 13, {
-        color: random() > 0.4 ? '#ffd977' : '#73e8d2',
-        size: 1.6 + random() * 2.2,
-        life: 0.35 + random() * 0.35,
-        vx: -p.vx * 0.1 + (random() - 0.5) * 24,
-        vy: -p.vy * 0.1 + (random() - 0.5) * 24
+        color: cosmeticRandom() > 0.4 ? '#ffd977' : '#73e8d2',
+        size: 1.6 + cosmeticRandom() * 2.2,
+        life: 0.35 + cosmeticRandom() * 0.35,
+        vx: -p.vx * 0.1 + (cosmeticRandom() - 0.5) * 24,
+        vy: -p.vy * 0.1 + (cosmeticRandom() - 0.5) * 24
       });
     }
   }
@@ -1200,6 +1277,7 @@
     state.frayTimer = 0;
     anchor.touchCooldown = 0.55;
     audio.pin(0);
+    mobileHaptic(7);
     burst(anchor.x, anchor.y, '#ffd977', 10, 75);
     addFloater(anchor.x, anchor.y - 33, 'FIRST LIGHT', '#ffd977');
     if (state.phaseIndex === 0) state.tutorialStep = 1;
@@ -1217,6 +1295,7 @@
     state.chain.push(anchor.id);
     state.lumen = Math.max(0, state.lumen - 1.5);
     audio.pin(state.chain.length - 1);
+    mobileHaptic(7);
     burst(anchor.x, anchor.y, state.chain.length === 3 ? '#ffd977' : '#73e8d2', 8, 62);
     addFloater(anchor.x, anchor.y - 30, String(state.chain.length), '#fff8da');
     if (state.phaseIndex === 0) state.tutorialStep = state.chain.length >= 3 ? 2 : 1;
@@ -1280,7 +1359,7 @@
       const values = enemy.type === 'rusher' ? [250, 3] : enemy.type === 'seeker' ? [175, 2] : [100, 1];
       captureScore += values[0];
       progressGain += values[1];
-      state.wildBlooms.push({ x: enemy.x, y: enemy.y, hue: 145 + random() * 190, size: 0.8 + random() * 0.7, age: 0 });
+      state.wildBlooms.push({ x: enemy.x, y: enemy.y, hue: 145 + cosmeticRandom() * 190, size: 0.8 + cosmeticRandom() * 0.7, age: 0 });
       burst(enemy.x, enemy.y, enemy.type === 'rusher' ? '#ffad62' : enemy.type === 'seeker' ? '#ff769d' : '#73e8d2', 14, 145);
     }
 
@@ -1304,10 +1383,12 @@
     state.lumen = Math.min(state.maxLumen, state.lumen + state.upgrades.captureRefund + caught.length * 3);
     state.regions.push({
       points: polygon.map((p) => ({ ...p })),
-      hue: 154 + random() * 170,
+      hue: 154 + cosmeticRandom() * 170,
       age: 0,
       strength: clamp(0.18 + caught.length * 0.025, 0.18, 0.34)
     });
+    while (state.regions.length > getVisualBudget().awakeningMarks) state.regions.shift();
+    addClosureSpectacle(polygon, caught.length, newBlooms);
 
     if (state.phaseIndex === 0) {
       state.phaseProgress = 1;
@@ -1317,6 +1398,7 @@
     }
 
     audio.close(caught.length, state.cleanWeave);
+    mobileHaptic(bossHit ? [16, 24, 28] : [9, 18, 14]);
     const center = polygonCentroid(polygon);
     const label = caught.length
       ? `${caught.length} SHADOW${caught.length === 1 ? '' : 'S'} BLOOMED  +${formatNumber(awarded)}`
@@ -1455,6 +1537,41 @@
     let y = 0;
     points.forEach((p) => { x += p.x; y += p.y; });
     return { x: x / points.length, y: y / points.length };
+  }
+
+  function addClosureSpectacle(polygon, caughtCount = 0, newBlooms = 0) {
+    if (!polygon.length) return;
+    const budget = getVisualBudget();
+    const center = polygonCentroid(polygon);
+    const radius = clamp(
+      Math.max(...polygon.map((point) => distance(point, center))) + 18,
+      46,
+      Math.min(W, H) * 0.38
+    );
+    const hue = 42 + hash01(state.loops * 17 + caughtCount * 31 + newBlooms * 7) * 128;
+    state.closureWaves.push({
+      x: center.x,
+      y: center.y,
+      points: polygon.map((point) => ({ x: point.x, y: point.y })),
+      radius,
+      hue,
+      age: 0,
+      duration: reducedMotion ? 0.82 : 1.18,
+      strength: clamp(0.58 + caughtCount * 0.06, 0.58, 0.9)
+    });
+    while (state.closureWaves.length > budget.closureWaves) state.closureWaves.shift();
+
+    state.awakeningMarks.push({
+      x: center.x,
+      y: center.y,
+      hue: 118 + hash01(state.loops * 43 + polygon.length * 11) * 176,
+      size: clamp(0.82 + polygon.length * 0.055 + caughtCount * 0.06, 0.82, 1.55),
+      petals: 5 + (state.loops % 3),
+      phase: hash01(state.loops * 71 + 3) * TAU,
+      age: 0,
+      caught: caughtCount
+    });
+    while (state.awakeningMarks.length > budget.awakeningMarks) state.awakeningMarks.shift();
   }
 
   function pointInPolygon(point, polygon) {
@@ -1618,6 +1735,7 @@
     state.shake = reducedMotion ? 0 : 12;
     state.flash = 0.72;
     audio.hit();
+    mobileHaptic(32);
     if (state.chain.length) clearWeave();
 
     if (state.upgrades.ward) {
@@ -1659,13 +1777,14 @@
     audio.close(5, true);
     showToast(state.phaseIndex === phaseDefs.length - 1 ? 'DAWN.' : `${phaseDefs[state.phaseIndex].title} blooms complete.`, false, 2.1);
     if (state.phaseIndex === phaseDefs.length - 1) {
-      for (let i = 0; i < 90; i++) {
-        addParticle(random() * W, H + random() * 100, {
-          color: random() > 0.45 ? '#ffd977' : '#73e8d2',
-          size: 2 + random() * 4,
-          life: 2.2 + random() * 2,
-          vx: (random() - 0.5) * 60,
-          vy: -80 - random() * 180,
+      const dawnParticleCount = reducedMotion ? 24 : isMobileProfile() ? 52 : 90;
+      for (let i = 0; i < dawnParticleCount; i++) {
+        addParticle(cosmeticRandom() * W, H + cosmeticRandom() * 100, {
+          color: cosmeticRandom() > 0.45 ? '#ffd977' : '#73e8d2',
+          size: 2 + cosmeticRandom() * 4,
+          life: 2.2 + cosmeticRandom() * 2,
+          vx: (cosmeticRandom() - 0.5) * 60,
+          vy: -80 - cosmeticRandom() * 180,
           gravity: -6
         });
       }
@@ -1851,34 +1970,35 @@
   }
 
   function addParticle(x, y, options = {}) {
-    if (state.particles.length > (reducedMotion ? 180 : 520)) state.particles.shift();
+    const particleCap = getVisualBudget().trailParticles;
+    if (state.particles.length >= particleCap) state.particles.shift();
     state.particles.push({
       x,
       y,
-      vx: options.vx ?? (random() - 0.5) * 80,
-      vy: options.vy ?? (random() - 0.5) * 80,
+      vx: options.vx ?? (cosmeticRandom() - 0.5) * 80,
+      vy: options.vy ?? (cosmeticRandom() - 0.5) * 80,
       life: options.life ?? 0.7,
       maxLife: options.life ?? 0.7,
       size: options.size ?? 2.4,
       color: options.color ?? '#ffd977',
       gravity: options.gravity ?? 8,
       drag: options.drag ?? 0.985,
-      shape: options.shape ?? (random() > 0.75 ? 'diamond' : 'circle')
+      shape: options.shape ?? (cosmeticRandom() > 0.75 ? 'diamond' : 'circle')
     });
   }
 
   function burst(x, y, color, count, speed) {
     count = reducedMotion ? Math.ceil(count * 0.35) : count;
     for (let i = 0; i < count; i++) {
-      const angle = random() * TAU;
-      const velocity = speed * (0.28 + random() * 0.72);
+      const angle = cosmeticRandom() * TAU;
+      const velocity = speed * (0.28 + cosmeticRandom() * 0.72);
       addParticle(x, y, {
         color,
-        size: 1.5 + random() * 3.6,
-        life: 0.42 + random() * 0.85,
+        size: 1.5 + cosmeticRandom() * 3.6,
+        life: 0.42 + cosmeticRandom() * 0.85,
         vx: Math.cos(angle) * velocity,
         vy: Math.sin(angle) * velocity,
-        gravity: 10 + random() * 18
+        gravity: 10 + cosmeticRandom() * 18
       });
     }
   }
@@ -1894,6 +2014,13 @@
     state.particles = state.particles.filter((p) => p.life > 0);
     state.regions.forEach((r) => { r.age += dt; });
     state.wildBlooms.forEach((b) => { b.age += dt; });
+    state.closureWaves.forEach((wave) => { wave.age += dt; });
+    state.closureWaves = state.closureWaves.filter((wave) => wave.age < wave.duration);
+    state.awakeningMarks.forEach((mark) => { mark.age += dt; });
+    const budget = getVisualBudget();
+    if (state.awakeningMarks.length > budget.awakeningMarks) {
+      state.awakeningMarks = state.awakeningMarks.slice(-budget.awakeningMarks);
+    }
   }
 
   function addFloater(x, y, text, color = '#fff8da', duration = 1.05) {
@@ -1911,16 +2038,20 @@
   function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    const shakeX = state.shake ? (random() - 0.5) * state.shake : 0;
-    const shakeY = state.shake ? (random() - 0.5) * state.shake : 0;
+    const shakeTick = Math.floor(state.runTime * 60);
+    const shakeX = state.shake ? (hash01(shakeTick * 2 + 1) - 0.5) * state.shake : 0;
+    const shakeY = state.shake ? (hash01(shakeTick * 2 + 2) - 0.5) * state.shake : 0;
     ctx.save();
     ctx.translate(shakeX, shakeY);
     drawBackground();
     drawRegions();
+    drawAwakeningMarks();
     drawWildBlooms();
+    drawClosureWaves();
     drawThread();
     drawAnchors();
     drawEnemies();
+    drawHollowForeground();
     if (state.mode !== 'title') drawPlayer();
     drawParticles();
     drawFloaters();
@@ -1956,6 +2087,8 @@
     ctx.fillStyle = moonGlow;
     ctx.fillRect(0, 0, W, H);
 
+    drawPhaseAtmosphere();
+
     ctx.save();
     ctx.lineCap = 'round';
     for (const blade of state.grass) {
@@ -1979,10 +2112,12 @@
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    for (const f of state.fireflies) {
+    const fireflyLimit = Math.min(state.fireflies.length, getVisualBudget().atmosphereMotifs + 10);
+    for (let i = 0; i < fireflyLimit; i++) {
+      const f = state.fireflies[i];
       const alpha = 0.18 + (Math.sin(f.phase * 2.2) + 1) * 0.17;
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = random() > 0.7 ? '#73e8d2' : '#ffd977';
+      ctx.fillStyle = f.color;
       ctx.shadowColor = ctx.fillStyle;
       ctx.shadowBlur = 9;
       ctx.beginPath();
@@ -1990,6 +2125,211 @@
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  function drawPhaseAtmosphere() {
+    const phaseKey = PHASE_ATMOSPHERES[state.phaseIndex] || PHASE_ATMOSPHERES[0];
+    const motifCount = getVisualBudget().atmosphereMotifs;
+    const time = reducedMotion ? 0 : state.runTime;
+
+    ctx.save();
+    if (phaseKey === 'first-stitch') {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(179, 231, 218, .16)';
+      ctx.fillStyle = '#fff1b8';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (let i = 0; i < motifCount; i++) {
+        const x = W * (0.1 + hash01(i * 29 + 1) * 0.8);
+        const y = H * (0.14 + hash01(i * 31 + 7) * 0.68);
+        if (i < 7) i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        const pulse = reducedMotion ? 1 : 0.8 + Math.sin(time * 1.15 + i) * 0.2;
+        ctx.moveTo(x + 1.5, y);
+        ctx.arc(x, y, (i % 4 === 0 ? 1.8 : 1) * pulse, 0, TAU);
+      }
+      ctx.globalAlpha = 0.55;
+      ctx.stroke();
+      ctx.globalAlpha = 0.72;
+      ctx.fill();
+    } else if (phaseKey === 'murmurs') {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < motifCount; i++) {
+        const y = H * (0.18 + hash01(i * 19 + 2) * 0.7);
+        const drift = reducedMotion ? 0 : Math.sin(time * 0.18 + i * 0.9) * W * 0.035;
+        const x = W * (hash01(i * 47 + 5) * 0.86 - 0.08) + drift;
+        const length = W * (0.11 + hash01(i * 13 + 8) * 0.18);
+        ctx.globalAlpha = 0.035 + (i % 3) * 0.012;
+        ctx.strokeStyle = i % 2 ? '#9fd9cf' : '#b7addc';
+        ctx.lineWidth = 5 + (i % 3) * 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.bezierCurveTo(x + length * 0.28, y - 13, x + length * 0.7, y + 13, x + length, y);
+        ctx.stroke();
+      }
+    } else if (phaseKey === 'hunger') {
+      const pulse = reducedMotion ? 0.42 : 0.38 + Math.sin(time * 0.85) * 0.045;
+      const hungerVignette = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.16, W * 0.5, H * 0.5, Math.max(W, H) * 0.66);
+      hungerVignette.addColorStop(0, 'rgba(4, 3, 17, 0)');
+      hungerVignette.addColorStop(1, `rgba(22, 4, 37, ${pulse})`);
+      ctx.fillStyle = hungerVignette;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(125, 85, 155, .16)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < motifCount; i++) {
+        const edge = i % 2 ? 0 : W;
+        const direction = edge === 0 ? 1 : -1;
+        const y = H * hash01(i * 23 + 4);
+        const reach = W * (0.045 + hash01(i * 41 + 6) * 0.07);
+        ctx.beginPath();
+        ctx.moveTo(edge, y);
+        ctx.quadraticCurveTo(edge + direction * reach * 0.65, y - 12, edge + direction * reach, y + 8);
+        ctx.lineTo(edge + direction * reach * 0.66, y + 2);
+        ctx.stroke();
+      }
+    } else if (phaseKey === 'crosswind') {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.lineCap = 'round';
+      const travel = reducedMotion ? 0 : (time * 34) % (W * 0.34);
+      for (let i = 0; i < motifCount; i++) {
+        const baseX = -W * 0.22 + hash01(i * 37 + 9) * W * 1.2 + travel;
+        const baseY = H * (0.12 + hash01(i * 17 + 3) * 0.76);
+        const length = Math.min(W, H) * (0.13 + hash01(i * 11 + 5) * 0.12);
+        ctx.globalAlpha = 0.055 + (i % 4) * 0.018;
+        ctx.strokeStyle = i % 3 ? '#b2d7e2' : '#e7c5e7';
+        ctx.lineWidth = 1 + (i % 3) * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.quadraticCurveTo(baseX + length * 0.48, baseY - length * 0.24, baseX + length, baseY - length * 0.46);
+        ctx.stroke();
+      }
+    } else {
+      drawHollowAtmosphere(motifCount, time);
+    }
+    ctx.restore();
+
+    if (state.dawn > 0) drawDawnAtmosphere();
+  }
+
+  function drawHollowAtmosphere(motifCount, time) {
+    const boss = state.enemies.find((enemy) => enemy.type === 'boss' && !enemy.dead);
+    const focus = boss || { x: playBounds.centerX, y: playBounds.centerY };
+    const sealProgress = clamp(state.phaseProgress / 3, 0, 1);
+    const reach = 0.84 - sealProgress * 0.36;
+    const shadow = ctx.createRadialGradient(focus.x, focus.y, 18, focus.x, focus.y, Math.min(W, H) * (0.46 - sealProgress * 0.1));
+    shadow.addColorStop(0, `rgba(2, 1, 9, ${0.55 - sealProgress * 0.24})`);
+    shadow.addColorStop(0.58, `rgba(8, 3, 18, ${0.32 - sealProgress * 0.16})`);
+    shadow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shadow;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.lineCap = 'round';
+    const rootCount = Math.min(motifCount, 14);
+    for (let i = 0; i < rootCount; i++) {
+      const fromSide = i % 4;
+      const along = 0.08 + hash01(i * 53 + 12) * 0.84;
+      const start = fromSide === 0 ? { x: 0, y: H * along }
+        : fromSide === 1 ? { x: W, y: H * along }
+          : fromSide === 2 ? { x: W * along, y: 0 }
+            : { x: W * along, y: H };
+      const endX = lerp(start.x, focus.x, reach * (0.74 + hash01(i * 7 + 2) * 0.18));
+      const endY = lerp(start.y, focus.y, reach * (0.74 + hash01(i * 7 + 2) * 0.18));
+      const bend = (hash01(i * 31 + 7) - 0.5) * Math.min(W, H) * 0.22;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.54 - sealProgress * 0.2;
+      ctx.strokeStyle = i % 3 ? '#090714' : '#140a20';
+      ctx.lineWidth = Math.max(2, 8 - i * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.quadraticCurveTo((start.x + endX) / 2 + bend, (start.y + endY) / 2 - bend * 0.35, endX, endY);
+      ctx.stroke();
+    }
+
+    if (sealProgress > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#ffd977';
+      ctx.shadowColor = '#ffd977';
+      ctx.shadowBlur = 10;
+      for (let i = 0; i < Math.round(sealProgress * 9); i++) {
+        const angle = hash01(i * 73 + 4) * TAU;
+        const inner = 32 + hash01(i * 17 + 2) * 20;
+        const outer = inner + 20 + hash01(i * 43 + 8) * 34;
+        ctx.globalAlpha = 0.18 + sealProgress * 0.24;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(focus.x + Math.cos(angle) * inner, focus.y + Math.sin(angle) * inner);
+        ctx.lineTo(focus.x + Math.cos(angle + 0.08) * outer, focus.y + Math.sin(angle + 0.08) * outer);
+        ctx.stroke();
+      }
+    }
+
+    if (!reducedMotion && sealProgress < 1) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.05 + Math.sin(time * 0.8) * 0.015;
+      ctx.strokeStyle = '#9279d8';
+      ctx.lineWidth = 18;
+      ctx.beginPath();
+      ctx.arc(focus.x, focus.y, Math.min(W, H) * (0.2 + sealProgress * 0.035), 0, TAU);
+      ctx.stroke();
+    }
+  }
+
+  function drawDawnAtmosphere() {
+    const dawn = clamp(state.dawn, 0, 1);
+    const horizonStage = easeOut(clamp(dawn / 0.42, 0, 1));
+    const rayStage = easeInOut(clamp((dawn - 0.18) / 0.56, 0, 1));
+    const bloomStage = easeOut(clamp((dawn - 0.52) / 0.48, 0, 1));
+    const sunX = W * 0.5;
+    const sunY = H * 0.18;
+
+    ctx.save();
+    const horizon = ctx.createLinearGradient(0, H, 0, H * 0.08);
+    horizon.addColorStop(0, `rgba(255, 190, 117, ${0.24 * horizonStage})`);
+    horizon.addColorStop(0.52, `rgba(255, 220, 166, ${0.09 * horizonStage})`);
+    horizon.addColorStop(1, 'rgba(255, 239, 193, 0)');
+    ctx.fillStyle = horizon;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    const sun = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, Math.min(W, H) * 0.34);
+    sun.addColorStop(0, `rgba(255, 249, 205, ${0.38 * horizonStage})`);
+    sun.addColorStop(0.16, `rgba(255, 215, 125, ${0.2 * horizonStage})`);
+    sun.addColorStop(1, 'rgba(255, 186, 102, 0)');
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.translate(sunX, sunY);
+    for (let i = 0; i < 10; i++) {
+      const angle = -Math.PI * 0.92 + i / 9 * Math.PI * 0.84;
+      const length = Math.max(W, H) * (0.55 + hash01(i * 29 + 5) * 0.3);
+      ctx.globalAlpha = rayStage * (0.025 + (i % 3) * 0.012);
+      ctx.fillStyle = '#fff0b0';
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle - 0.022) * 16, Math.sin(angle - 0.022) * 16);
+      ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+      ctx.lineTo(Math.cos(angle + 0.022) * 16, Math.sin(angle + 0.022) * 16);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    if (bloomStage > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const motifCount = Math.min(getVisualBudget().atmosphereMotifs, 14);
+      for (let i = 0; i < motifCount; i++) {
+        const x = W * (0.08 + hash01(i * 61 + 9) * 0.84);
+        const baseY = H * (0.24 + hash01(i * 47 + 3) * 0.68);
+        const lift = reducedMotion ? 0 : (state.runTime * (9 + i % 4) + i * 23) % 68;
+        const y = baseY - lift;
+        ctx.globalAlpha = bloomStage * (0.12 + (i % 4) * 0.035);
+        ctx.fillStyle = i % 3 ? '#ffd977' : '#73e8d2';
+        ctx.beginPath();
+        ctx.ellipse(x, y, 1.4, 3.2, hash01(i * 13) * TAU, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   function drawRegions() {
@@ -2022,6 +2362,140 @@
       }
       ctx.restore();
     }
+  }
+
+  function drawAwakeningMarks() {
+    for (let index = 0; index < state.awakeningMarks.length; index++) {
+      const mark = state.awakeningMarks[index];
+      const growth = easeOut(clamp(mark.age / 0.9, 0, 1));
+      const scale = mark.size * growth;
+      if (scale <= 0) continue;
+      ctx.save();
+      ctx.translate(mark.x, mark.y);
+      ctx.rotate(mark.phase);
+      ctx.scale(scale, scale);
+
+      ctx.globalAlpha = 0.18 + Math.min(0.2, mark.caught * 0.025);
+      ctx.strokeStyle = `hsl(${mark.hue} 54% 62%)`;
+      ctx.lineWidth = 1.1;
+      for (let i = 0; i < mark.petals; i++) {
+        const angle = i / mark.petals * TAU;
+        const reach = 13 + (i % 2) * 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(Math.cos(angle + 0.32) * reach * 0.55, Math.sin(angle + 0.32) * reach * 0.55, Math.cos(angle) * reach, Math.sin(angle) * reach);
+        ctx.stroke();
+      }
+
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.17 + Math.min(0.14, mark.caught * 0.02);
+      ctx.fillStyle = `hsl(${mark.hue + 28} 76% 68%)`;
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 7;
+      for (let i = 0; i < mark.petals; i++) {
+        const angle = i / mark.petals * TAU;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(angle) * 8, Math.sin(angle) * 8, 2.2, 5.5, angle, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 0.42;
+      ctx.fillStyle = '#ffe59a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawClosureWaves() {
+    for (const wave of state.closureWaves) {
+      const life = clamp(wave.age / wave.duration, 0, 1);
+      const expansion = reducedMotion ? 0.68 : easeOut(life);
+      const fade = reducedMotion ? 1 - life : Math.pow(1 - life, 1.35);
+      const radius = wave.radius * (0.24 + expansion * 0.76);
+
+      ctx.save();
+      ctx.beginPath();
+      wave.points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      ctx.closePath();
+      ctx.clip();
+
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(wave.x, wave.y, 0, wave.x, wave.y, Math.max(1, radius));
+      glow.addColorStop(0, `hsla(${wave.hue}, 92%, 76%, ${0.2 * wave.strength * fade})`);
+      glow.addColorStop(0.62, `hsla(${wave.hue + 38}, 88%, 67%, ${0.08 * wave.strength * fade})`);
+      glow.addColorStop(1, `hsla(${wave.hue + 58}, 92%, 72%, 0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(wave.x - radius, wave.y - radius, radius * 2, radius * 2);
+
+      ctx.strokeStyle = `hsl(${wave.hue} 92% 78%)`;
+      ctx.shadowColor = `hsl(${wave.hue + 25} 95% 72%)`;
+      ctx.shadowBlur = 14;
+      ctx.globalAlpha = 0.62 * fade;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(wave.x, wave.y, radius, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 0.24 * fade;
+      ctx.lineWidth = 5.5;
+      ctx.beginPath();
+      ctx.arc(wave.x, wave.y, radius * 0.82, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawHollowForeground() {
+    if (state.phaseIndex !== phaseDefs.length - 1 || state.dawn >= 0.98) return;
+    const boss = state.enemies.find((enemy) => enemy.type === 'boss' && !enemy.dead);
+    const focus = boss || { x: playBounds.centerX, y: playBounds.centerY };
+    const sealProgress = clamp(state.phaseProgress / 3, 0, 1);
+    const retreat = 1 - sealProgress * 0.48 - state.dawn * 0.45;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(5, 3, 13, ${0.78 * retreat})`;
+    ctx.lineCap = 'round';
+    for (let corner = 0; corner < 4; corner++) {
+      const sx = corner % 2 ? W : 0;
+      const sy = corner > 1 ? H : 0;
+      const directionX = sx ? -1 : 1;
+      const directionY = sy ? -1 : 1;
+      for (let branch = 0; branch < 3; branch++) {
+        const reach = Math.min(W, H) * (0.13 + branch * 0.035) * retreat;
+        ctx.lineWidth = 8 - branch * 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy + directionY * branch * 16);
+        ctx.quadraticCurveTo(sx + directionX * reach * 0.42, sy + directionY * reach * 0.25, sx + directionX * reach, sy + directionY * reach * (0.72 + branch * 0.12));
+        ctx.stroke();
+      }
+    }
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (let seal = 0; seal < 3; seal++) {
+      const angle = -Math.PI / 2 + seal / 3 * TAU;
+      const radius = 87 + seal * 3;
+      const x = focus.x + Math.cos(angle) * radius;
+      const y = focus.y + Math.sin(angle) * radius;
+      const filled = seal < state.phaseProgress;
+      ctx.globalAlpha = filled ? 0.78 : 0.18;
+      ctx.strokeStyle = filled ? '#ffd977' : '#8e77b5';
+      ctx.fillStyle = filled ? '#fff0a5' : '#312142';
+      ctx.shadowColor = filled ? '#ffd977' : '#6e539c';
+      ctx.shadowBlur = filled ? 15 : 5;
+      ctx.lineWidth = filled ? 2 : 1;
+      ctx.beginPath();
+      for (let point = 0; point < 4; point++) {
+        const a = Math.PI / 4 + point / 4 * TAU;
+        const px = x + Math.cos(a) * 7;
+        const py = y + Math.sin(a) * 7;
+        point ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      if (filled) ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawWildBlooms() {
@@ -2060,37 +2534,49 @@
     const segments = getThreadSegments();
     const fray = state.frayTimer > 0;
     const threadColor = fray ? '#ff769d' : state.invalidFlash > 0 ? '#ffad62' : '#ffe69a';
+    const first = anchorById(state.chain[0]);
+    if (!first) return;
+
+    const traceThreadPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < state.chain.length; i++) {
+        const anchor = anchorById(state.chain[i]);
+        if (anchor) ctx.lineTo(anchor.x, anchor.y);
+      }
+      ctx.lineTo(state.player.x, state.player.y);
+    };
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = fray ? 'rgba(37, 7, 29, .86)' : 'rgba(5, 10, 27, .82)';
+    ctx.lineWidth = 9;
+    traceThreadPath();
+    ctx.stroke();
+    ctx.restore();
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    for (const width of [13, 5, 1.7]) {
+    for (const width of [15, 6, 2]) {
       ctx.strokeStyle = threadColor;
-      ctx.globalAlpha = width === 13 ? 0.08 : width === 5 ? 0.27 : 0.95;
+      ctx.globalAlpha = width === 15 ? 0.075 : width === 6 ? 0.3 : 0.98;
       ctx.lineWidth = width;
       ctx.shadowColor = threadColor;
-      ctx.shadowBlur = width === 1.7 ? 13 : 4;
-      ctx.beginPath();
-      const first = anchorById(state.chain[0]);
-      if (!first) continue;
-      ctx.moveTo(first.x, first.y);
-      for (let i = 1; i < state.chain.length; i++) {
-        const a = anchorById(state.chain[i]);
-        if (a) ctx.lineTo(a.x, a.y);
-      }
-      ctx.lineTo(state.player.x, state.player.y);
+      ctx.shadowBlur = width === 2 ? 15 : 5;
+      traceThreadPath();
       ctx.stroke();
     }
 
     if (state.chain.length >= 3) {
-      const first = anchorById(state.chain[0]);
       if (first) {
         ctx.globalAlpha = reducedMotion ? 0.22 : 0.22 + Math.sin(state.runTime * 4) * 0.06;
         ctx.strokeStyle = '#ffd977';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 8]);
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 7]);
         ctx.beginPath();
         ctx.moveTo(state.player.x, state.player.y);
         ctx.lineTo(first.x, first.y);
@@ -2114,16 +2600,70 @@
         ctx.fill();
       });
     }
+
+    const glintCount = getVisualBudget().threadGlints;
+    if (!fray && glintCount > 0 && segments.length) {
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = '#fffbdc';
+      ctx.shadowColor = '#ffd977';
+      ctx.shadowBlur = 12;
+      for (let i = 0; i < glintCount; i++) {
+        const segment = segments[i % segments.length];
+        const offset = hash01(i * 37 + state.chain.length * 11);
+        const t = (state.runTime * 0.52 + offset) % 1;
+        const x = lerp(segment.a.x, segment.b.x, t);
+        const y = lerp(segment.a.y, segment.b.y, t);
+        ctx.beginPath();
+        ctx.arc(x, y, i % 3 === 0 ? 2.2 : 1.25, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    state.chain.forEach((id, index) => {
+      const anchor = anchorById(id);
+      if (!anchor) return;
+      ctx.save();
+      ctx.translate(anchor.x, anchor.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.globalAlpha = index === 0 ? 0.92 : 0.68;
+      ctx.strokeStyle = index === 0 ? '#ffd977' : '#b5fff0';
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = index === 0 ? 15 : 9;
+      ctx.lineWidth = index === 0 ? 2 : 1.25;
+      const size = index === 0 ? 7 : 5;
+      ctx.strokeRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+    });
     ctx.restore();
+  }
+
+  function getVisualTargetState() {
+    if (!state.anchors.length) return { targetAnchorId: null, targetState: 'idle' };
+    const firstId = state.chain[0] ?? null;
+    if (state.chain.length >= 3) return { targetAnchorId: firstId, targetState: 'closure-ready' };
+    if (state.chain.length) {
+      let next = null;
+      let best = isMobileProfile() ? 96 : 88;
+      for (const anchor of state.anchors) {
+        if (state.chain.includes(anchor.id)) continue;
+        const d = distance(state.player, anchor);
+        if (d < best) { best = d; next = anchor; }
+      }
+      return { targetAnchorId: next?.id ?? firstId, targetState: 'active' };
+    }
+    const nearby = nearestAvailableAnchor(66);
+    return { targetAnchorId: nearby?.id ?? null, targetState: nearby ? 'near' : 'idle' };
   }
 
   function drawAnchors() {
     const firstId = state.chain[0];
-    const hover = !state.chain.length ? nearestAvailableAnchor(66) : null;
+    const visualTarget = getVisualTargetState();
+    const closureReady = visualTarget.targetState === 'closure-ready';
     for (const anchor of state.anchors) {
       const activeIndex = state.chain.indexOf(anchor.id);
       const first = anchor.id === firstId;
-      const highlighted = hover?.id === anchor.id;
+      const highlighted = visualTarget.targetState === 'near' && visualTarget.targetAnchorId === anchor.id;
+      const nextTarget = visualTarget.targetState === 'active' && visualTarget.targetAnchorId === anchor.id && !first;
       const pulse = 1 + Math.sin(anchor.phase * 2) * 0.05;
       ctx.save();
       ctx.translate(anchor.x, anchor.y);
@@ -2170,15 +2710,76 @@
         ctx.fill();
       }
 
-      if (first || highlighted || (state.phaseIndex === 0 && anchor.guide >= 0 && !state.chain.length)) {
+      if (first || highlighted || nextTarget || (state.phaseIndex === 0 && anchor.guide >= 0 && !state.chain.length)) {
         const ring = reducedMotion ? 31 : 31 + Math.sin(state.runTime * 4 + anchor.phase) * 4;
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = first ? 0.62 : 0.25;
-        ctx.strokeStyle = first ? '#ffd977' : '#fff8da';
-        ctx.lineWidth = first ? 1.5 : 1;
+        ctx.globalAlpha = first ? 0.68 : nextTarget ? 0.46 : 0.25;
+        ctx.strokeStyle = first ? '#ffd977' : nextTarget ? '#9df8e5' : '#fff8da';
+        ctx.lineWidth = first ? 1.8 : nextTarget ? 1.4 : 1;
         ctx.beginPath();
         ctx.arc(0, 0, ring, 0, TAU);
         ctx.stroke();
+
+        if (highlighted) {
+          ctx.save();
+          ctx.rotate(Math.PI / 4);
+          ctx.globalAlpha = 0.72;
+          ctx.strokeStyle = '#fff1aa';
+          ctx.strokeRect(-22, -22, 44, 44);
+          ctx.restore();
+        }
+
+        if (nextTarget) {
+          ctx.globalAlpha = 0.78;
+          ctx.strokeStyle = '#b9fff1';
+          ctx.lineWidth = 2;
+          for (let side = 0; side < 4; side++) {
+            ctx.save();
+            ctx.rotate(side * Math.PI / 2);
+            ctx.beginPath();
+            ctx.moveTo(-7, -27);
+            ctx.lineTo(0, -21);
+            ctx.lineTo(7, -27);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        if (first) {
+          ctx.globalAlpha = closureReady ? 0.94 : 0.72;
+          ctx.strokeStyle = '#ffd977';
+          ctx.lineWidth = closureReady ? 2.4 : 1.5;
+          if (closureReady) ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(0, 0, ring + 8, 0, TAU);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          for (let ray = 0; ray < 8; ray++) {
+            const angle = ray / 8 * TAU;
+            const inner = closureReady ? ring + 2 : ring + 5;
+            const outer = ring + (closureReady ? 13 : 10);
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+            ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+            ctx.stroke();
+          }
+          if (closureReady) {
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = '#fff4b8';
+            for (let arrow = 0; arrow < 4; arrow++) {
+              const angle = arrow / 4 * TAU;
+              ctx.save();
+              ctx.rotate(angle);
+              ctx.beginPath();
+              ctx.moveTo(0, -23);
+              ctx.lineTo(-4, -30);
+              ctx.lineTo(4, -30);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+        }
       }
 
       if (activeIndex >= 0) {
@@ -2280,9 +2881,31 @@
   function drawBoss(enemy) {
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
-    const breathe = 1 + Math.sin(enemy.phase * 1.4) * 0.035;
+    const breathe = reducedMotion ? 1 : 1 + Math.sin(enemy.phase * 1.4) * 0.035;
     ctx.scale(breathe, breathe);
     const vulnerable = enemy.invulnerable <= 0;
+    const sealStage = clamp(3 - enemy.hp, 0, 3);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(8, 5, 18, ${0.88 - sealStage * 0.12})`;
+    ctx.lineCap = 'round';
+    for (let limb = 0; limb < 8; limb++) {
+      const angle = limb / 8 * TAU + 0.18;
+      const inner = enemy.radius * 0.68;
+      const length = enemy.radius * (1.28 - sealStage * 0.1 + (limb % 2) * 0.12);
+      ctx.lineWidth = 10 - limb % 3 * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.quadraticCurveTo(
+        Math.cos(angle + (limb % 2 ? 0.24 : -0.24)) * length * 0.8,
+        Math.sin(angle + (limb % 2 ? 0.24 : -0.24)) * length * 0.8,
+        Math.cos(angle) * length,
+        Math.sin(angle) * length
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
 
     ctx.globalCompositeOperation = 'lighter';
     for (let ring = 0; ring < enemy.hp; ring++) {
@@ -2316,8 +2939,54 @@
     ctx.closePath();
     ctx.fill();
 
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(118, 86, 145, ${0.28 + sealStage * 0.08})`;
+    ctx.lineWidth = 1.4;
+    for (let plate = 0; plate < 7; plate++) {
+      const angle = plate / 7 * TAU - Math.PI / 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * enemy.radius * 0.27, Math.sin(angle) * enemy.radius * 0.27, enemy.radius * 0.54, angle - 0.42, angle + 0.42);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    if (sealStage > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#ffd977';
+      ctx.shadowColor = '#ffb36e';
+      ctx.shadowBlur = 9;
+      ctx.lineWidth = 1.6;
+      for (let crack = 0; crack < sealStage * 4; crack++) {
+        const angle = hash01(crack * 47 + 9) * TAU;
+        const start = 11 + (crack % 3) * 4;
+        const end = start + 17 + hash01(crack * 19 + 4) * 14;
+        ctx.globalAlpha = 0.42 + sealStage * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * start, Math.sin(angle) * start);
+        ctx.lineTo(Math.cos(angle + 0.11) * end, Math.sin(angle + 0.11) * end);
+        ctx.lineTo(Math.cos(angle - 0.05) * (end + 7), Math.sin(angle - 0.05) * (end + 7));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = vulnerable ? 0.85 : 0.3;
+    const opening = 8 + sealStage * 7;
+    const core = ctx.createRadialGradient(0, 8, 0, 0, 8, opening * 1.6);
+    core.addColorStop(0, `rgba(255, 244, 184, ${0.18 + sealStage * 0.2})`);
+    core.addColorStop(0.45, `rgba(255, 118, 157, ${0.18 + sealStage * 0.08})`);
+    core.addColorStop(1, 'rgba(115, 232, 210, 0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.ellipse(0, 9, opening * 1.1, opening * 0.72, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = vulnerable ? 0.85 + sealStage * 0.04 : 0.3;
     ctx.fillStyle = '#ffd977';
     ctx.shadowColor = '#ff769d';
     ctx.shadowBlur = 18;
@@ -2325,6 +2994,15 @@
     ctx.ellipse(-16, -5, 7, 2.5, -0.15, 0, TAU);
     ctx.ellipse(16, -5, 7, 2.5, 0.15, 0, TAU);
     ctx.fill();
+
+    ctx.globalAlpha = 0.52 + sealStage * 0.12;
+    ctx.strokeStyle = sealStage >= 2 ? '#fff0a6' : '#9279d8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-22, -22);
+    ctx.quadraticCurveTo(-9, -34 - sealStage * 2, 0, -25);
+    ctx.quadraticCurveTo(9, -34 - sealStage * 2, 22, -22);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -2335,7 +3013,33 @@
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.facing);
+    ctx.scale(isMobileProfile() ? 1.08 : 1, isMobileProfile() ? 1.08 : 1);
     const flap = reducedMotion ? 0 : Math.sin(p.wing) * 0.38;
+    const flight = clamp(Math.hypot(p.vx, p.vy) / 235, 0, 1);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const aura = ctx.createRadialGradient(0, 0, 2, 0, 0, 28 + flight * 7);
+    aura.addColorStop(0, 'rgba(255, 232, 151, .24)');
+    aura.addColorStop(0.42, 'rgba(115, 232, 210, .12)');
+    aura.addColorStop(1, 'rgba(115, 232, 210, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, 35, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    ctx.strokeStyle = '#83d7cb';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-8, -2);
+    ctx.quadraticCurveTo(-18 - flight * 5, -9, -24 - flight * 8, -5);
+    ctx.moveTo(-8, 2);
+    ctx.quadraticCurveTo(-18 - flight * 5, 9, -24 - flight * 8, 5);
+    ctx.stroke();
+    ctx.restore();
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = 'rgba(115, 232, 210, .28)';
@@ -2346,12 +3050,18 @@
     ctx.beginPath();
     ctx.ellipse(-2, -9, 11, 5, -0.4, 0, TAU);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(210, 255, 245, .62)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
     ctx.restore();
     ctx.save();
     ctx.rotate(0.42 + flap);
     ctx.beginPath();
     ctx.ellipse(-2, 9, 11, 5, 0.4, 0, TAU);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(210, 255, 245, .62)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
     ctx.restore();
 
     ctx.fillStyle = '#fff0a6';
@@ -2359,6 +3069,15 @@
     ctx.shadowBlur = 20;
     ctx.beginPath();
     ctx.ellipse(2, 0, 10, 5, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#fff8d7';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#fffdf1';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(4, 0, 2.2, 0, TAU);
     ctx.fill();
     ctx.fillStyle = '#ffd977';
     ctx.beginPath();
@@ -2372,6 +3091,14 @@
     ctx.beginPath();
     ctx.moveTo(-8, 0);
     ctx.lineTo(-18, 0);
+    ctx.stroke();
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(8, -2.5);
+    ctx.quadraticCurveTo(15, -8, 18, -5);
+    ctx.moveTo(8, 2.5);
+    ctx.quadraticCurveTo(15, 8, 18, 5);
     ctx.stroke();
     ctx.restore();
   }
@@ -2451,6 +3178,212 @@
     });
   }
 
+  let qaGuardianOverride = '';
+
+  function getRngSnapshot() {
+    return Object.freeze({
+      gameplayCalls: gameplayRandomCalls,
+      cosmeticCalls: cosmeticRandomCalls
+    });
+  }
+
+  function getVisualSnapshot() {
+    const budget = getVisualBudget();
+    const target = getVisualTargetState();
+    const boss = state.enemies.find((enemy) => enemy.type === 'boss');
+    const sealProgress = state.phaseIndex === phaseDefs.length - 1 ? clamp(state.phaseProgress / 3, 0, 1) : 0;
+    const guardianState = qaGuardianOverride || (state.phaseIndex !== phaseDefs.length - 1
+      ? 'dormant'
+      : sealProgress >= 1 || (boss && boss.hp <= 0) || state.dawn > 0
+        ? 'defeated'
+        : sealProgress > 0 || (boss && boss.invulnerable > 0)
+          ? 'sealing'
+          : 'engaged');
+    const awakenedAnchors = state.anchors.filter((anchor) => anchor.awakened).length;
+    const awakenedCount = awakenedAnchors + state.awakeningMarks.length;
+    const closurePulse = state.closureWaves.reduce((strongest, wave) => {
+      const pulse = clamp(1 - wave.age / Math.max(0.001, wave.duration), 0, 1);
+      return Math.max(strongest, pulse);
+    }, 0);
+    const visualCounts = Object.freeze({
+      awakeningMarks: state.awakeningMarks.length,
+      closureWaves: state.closureWaves.length,
+      atmosphereMotifs: budget.atmosphereMotifs,
+      threadGlints: state.chain.length && state.frayTimer <= 0 ? budget.threadGlints : 0,
+      trailParticles: state.particles.length,
+      regions: state.regions.length,
+      wildBlooms: state.wildBlooms.length,
+      particles: state.particles.length
+    });
+    return Object.freeze({
+      profile: controlProfile,
+      reducedMotion,
+      phaseIndex: state.phaseIndex,
+      phaseKey: PHASE_ATMOSPHERES[state.phaseIndex] || PHASE_ATMOSPHERES[0],
+      atmosphereKey: PHASE_ATMOSPHERES[state.phaseIndex] || PHASE_ATMOSPHERES[0],
+      targetAnchorId: target.targetAnchorId,
+      targetState: target.targetState,
+      threadState: state.frayTimer > 0 ? 'fraying' : state.chain.length >= 3 ? 'closure-ready' : state.chain.length ? 'active' : 'idle',
+      awakeningLevel: clamp(state.awakeningMarks.length / Math.max(1, budget.awakeningMarks), 0, 1),
+      awakenedCount,
+      closurePulse,
+      cameraPulse: reducedMotion ? 0 : state.shake,
+      guardianState,
+      guardianHp: boss ? boss.hp : null,
+      sealProgress,
+      dawn: clamp(state.dawn, 0, 1),
+      visualCounts
+    });
+  }
+
+  function ensureQaAnchors() {
+    if (state.anchors.length >= 3) return;
+    const layout = calculateTutorialLayout(W, H, controlProfile);
+    state.anchors = layout.anchors.map((point, index) => ({
+      id: -23030 - index,
+      x: point.x,
+      y: point.y,
+      guide: index,
+      radius: ANCHOR_RADIUS,
+      touchCooldown: 0,
+      awakened: false,
+      bloom: 0,
+      hue: 164 + index * 38,
+      phase: index * 1.7
+    }));
+  }
+
+  function placeQaPlayerAwayFromAnchors() {
+    const candidates = [
+      { x: playBounds.left, y: playBounds.top },
+      { x: playBounds.right, y: playBounds.top },
+      { x: playBounds.left, y: playBounds.bottom },
+      { x: playBounds.right, y: playBounds.bottom },
+      { x: playBounds.centerX, y: playBounds.centerY }
+    ];
+    const best = candidates.reduce((winner, candidate) => {
+      const clearance = Math.min(...state.anchors.map((anchor) => distance(candidate, anchor)));
+      return !winner || clearance > winner.clearance ? { point: candidate, clearance } : winner;
+    }, null);
+    state.player.x = best?.point.x ?? playBounds.centerX;
+    state.player.y = best?.point.y ?? playBounds.centerY;
+  }
+
+  function makeQaBoss(hp) {
+    return {
+      id: -23023,
+      type: 'boss',
+      x: playBounds.centerX,
+      y: playBounds.centerY,
+      vx: 0,
+      vy: 0,
+      radius: 61,
+      speed: 27,
+      phase: 0.7,
+      age: 0,
+      frayCooldown: 0,
+      chargeCooldown: 3,
+      chargeState: 'idle',
+      chargeTimer: 0,
+      chargeX: 0,
+      chargeY: 0,
+      hp,
+      invulnerable: hp < 3 && hp > 0 ? 1.2 : 0,
+      dead: false
+    };
+  }
+
+  function setQaHollowScenario(hp, progress, guardianState, dawn = 0) {
+    ensureQaAnchors();
+    state.phaseIndex = phaseDefs.length - 1;
+    state.phaseTarget = 3;
+    state.phaseProgress = progress;
+    state.phaseTime = Infinity;
+    state.mode = 'playing';
+    state.dawn = clamp(dawn, 0, 1);
+    state.chain = [];
+    state.enemies = [makeQaBoss(hp)];
+    state.player.x = clamp(playBounds.centerX, playBounds.left, playBounds.right);
+    state.player.y = clamp(playBounds.centerY + Math.min(130, playBounds.height * 0.25), playBounds.top, playBounds.bottom);
+    qaGuardianOverride = guardianState;
+  }
+
+  function setVisualScenario(name) {
+    const scenario = String(name || '').toLowerCase();
+    ensureQaAnchors();
+    qaGuardianOverride = '';
+
+    if (scenario === 'idle') {
+      state.chain = [];
+      placeQaPlayerAwayFromAnchors();
+    } else if (scenario === 'near') {
+      state.chain = [];
+      state.player.x = state.anchors[0].x;
+      state.player.y = state.anchors[0].y;
+    } else if (scenario === 'active') {
+      state.chain = [state.anchors[0].id];
+      state.player.x = state.anchors[1].x;
+      state.player.y = state.anchors[1].y;
+    } else if (scenario === 'closure-ready') {
+      state.chain = state.anchors.slice(0, 3).map((anchor) => anchor.id);
+      state.player.x = state.anchors[0].x;
+      state.player.y = state.anchors[0].y;
+    } else if (scenario === 'closure-pulse') {
+      const polygon = state.anchors.slice(0, 3).map((anchor) => ({ x: anchor.x, y: anchor.y }));
+      addClosureSpectacle(polygon, 2, 2);
+    } else if (scenario === 'hollow-dormant') {
+      setQaHollowScenario(3, 0, 'dormant');
+    } else if (scenario === 'hollow-engaged') {
+      setQaHollowScenario(3, 0, 'engaged');
+    } else if (scenario === 'hollow-sealing-1') {
+      setQaHollowScenario(2, 1, 'sealing');
+    } else if (scenario === 'hollow-sealing-2') {
+      setQaHollowScenario(1, 2, 'sealing');
+    } else if (scenario === 'hollow-defeated') {
+      setQaHollowScenario(0, 3, 'defeated');
+    } else if (scenario === 'dawn-early') {
+      setQaHollowScenario(0, 3, 'defeated', 0.36);
+    } else if (scenario === 'dawn-full') {
+      setQaHollowScenario(0, 3, 'defeated', 1);
+    } else if (scenario.startsWith('phase-')) {
+      const phaseKey = scenario.slice(6);
+      const phaseIndex = PHASE_ATMOSPHERES.indexOf(phaseKey);
+      if (phaseIndex >= 0) {
+        state.phaseIndex = phaseIndex;
+        state.phaseTarget = phaseDefs[phaseIndex].target;
+        state.phaseProgress = 0;
+        state.dawn = 0;
+        if (phaseIndex === phaseDefs.length - 1) state.enemies = [makeQaBoss(3)];
+      }
+    } else {
+      throw new Error(`Unknown Lumenloom visual QA scenario: ${name}`);
+    }
+    return getVisualSnapshot();
+  }
+
+  function setQaReducedMotion(value) {
+    reducedMotion = Boolean(value);
+    if (reducedMotion) state.shake = 0;
+    return getVisualSnapshot();
+  }
+
+  function renderForQa(count = 1) {
+    const renders = clamp(Math.floor(Number(count) || 1), 1, 30);
+    for (let i = 0; i < renders; i++) render();
+    return getVisualSnapshot();
+  }
+
+  function assertCosmeticIsolation(count = 3) {
+    const gameplayCallsBefore = gameplayRandomCalls;
+    renderForQa(count);
+    const gameplayCallsAfter = gameplayRandomCalls;
+    return Object.freeze({
+      isolated: gameplayCallsBefore === gameplayCallsAfter,
+      gameplayCallsBefore,
+      gameplayCallsAfter
+    });
+  }
+
   const qaHostAllowed = window.location.protocol === 'file:'
     || ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
 
@@ -2461,6 +3394,14 @@
       getControlProfile: () => controlProfile,
       getPlayBounds: () => Object.freeze({ ...playBounds }),
       getGeometrySnapshot,
+      getVisualConstants: () => VISUAL_CONSTANTS,
+      getVisualContract: () => VISUAL_CONSTANTS,
+      getVisualSnapshot,
+      getRngSnapshot,
+      setVisualScenario,
+      setReducedMotion: setQaReducedMotion,
+      renderForQa,
+      assertCosmeticIsolation,
       resolveControlProfile,
       calculatePlayBounds,
       calculateTutorialLayout,

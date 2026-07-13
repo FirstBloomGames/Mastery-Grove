@@ -428,6 +428,11 @@
     ui.frameLoadingActions.classList.add('is-hidden');
   }
 
+  function setRunChromeActive(active) {
+    ui.gameShell.classList.toggle('is-run-active', Boolean(active));
+    ui.gameShell.dataset.runState = active ? 'running' : 'idle';
+  }
+
   function lumenloomPlatformProfile() {
     const forcedProfile = new URLSearchParams(location.search).get('profile');
     if (forcedProfile === 'mobile' || forcedProfile === 'desktop') return forcedProfile;
@@ -459,6 +464,7 @@
     ui.groveScreen.classList.add('is-hidden');
     ui.gameShell.classList.remove('is-hidden');
     ui.gameShell.setAttribute('aria-hidden', 'false');
+    setRunChromeActive(false);
     resetLoadingState();
     ui.activeTreeLabel.textContent = game.number;
     ui.activeGameTitle.textContent = game.title;
@@ -507,6 +513,7 @@
     ui.gameFrame.src = 'about:blank';
     ui.gameShell.classList.add('is-hidden');
     ui.gameShell.setAttribute('aria-hidden', 'true');
+    setRunChromeActive(false);
     ui.groveScreen.classList.remove('is-hidden');
     ui.nextGameButton.classList.add('is-hidden');
     ui.trialProgress.classList.add('is-hidden');
@@ -555,15 +562,20 @@
       return;
     }
     if (transitioned.code === 'run-abandoned') {
+      setRunChromeActive(false);
       ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
       ui.nextGameButton.classList.add('is-hidden');
       showToast('Run abandoned. No score was recorded.');
       return;
     }
-    if (transitioned.code === 'run-completed') recordResult(transitioned.result);
+    if (transitioned.code === 'run-completed') {
+      setRunChromeActive(false);
+      recordResult(transitioned.result);
+    }
   }
 
   function prepareForRun() {
+    setRunChromeActive(true);
     ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
     ui.nextGameButton.classList.add('is-hidden');
     if (trialSession?.active) {

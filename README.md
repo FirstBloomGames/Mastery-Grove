@@ -1,8 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.2**
+Current build: **0.4.0-rc.3**
 
-This candidate adds Lumenloom's separate portrait-mobile gameplay profile: relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding when the game launches from Mastery Grove. Its desktop gameplay profile and shared scoring/progression contract remain unchanged.
+This candidate completes Lumenloom's portrait-mobile release pass and Garden Awakening spectacle. It adds relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding from Mastery Grove. The garden now carries five distinct night atmospheres, shape-backed target guidance, layered luminous thread and knots, persistent capped awakening marks, closure bloom waves, a responsive Hollow Guardian, and staged dawn. Mastery Grove also quiets its game bar during active play while preserving a clear 44px return control. Desktop and mobile share the same gameplay rules, scoring, progression, results, saves, and Grove protocol.
 
 This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, and Prismbind. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
 
@@ -35,6 +35,6 @@ This is a release candidate, not a legal or store-submission approval. Before pu
 
 - Replace the review placeholders in `PRIVACY.md` and `CREDITS.md` with owner-approved text.
 - Confirm the final rights holder, contact route, platform privacy behavior, and any SDK disclosures.
-- Perform an uncoached full-progression playtest from a clean profile.
+- Perform an uncoached full-progression playtest from a clean profile on desktop and physical iPhone/Android hardware.
 - Validate the exact `dist` upload on the chosen portal, host, or mobile wrapper.
 - Produce platform-specific PNG icons, screenshots, signing credentials, and store metadata where required.

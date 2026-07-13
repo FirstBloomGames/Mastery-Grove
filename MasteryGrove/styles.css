@@ -922,7 +922,7 @@ button:focus-visible {
   inset: 0;
   z-index: 100;
   display: grid;
-  grid-template-rows: calc(52px + env(safe-area-inset-top)) 1fr;
+  grid-template-rows: calc(56px + env(safe-area-inset-top)) 1fr;
   background: var(--ink);
 }
 
@@ -1197,4 +1197,91 @@ button:focus-visible {
   .mastery-line span { font-size: 11px; }
   .mastery-line strong { font-size: 16px; }
   .game-card > small { font-size: 11px; }
+}
+
+/* D-023 — once a run begins, the Grove frame becomes a quiet safety rail.
+   Return remains labeled, keyboard-visible, and comfortably touch-sized. */
+.return-button,
+.next-game-button {
+  min-height: 44px;
+}
+
+.game-shell,
+.game-bar,
+.game-bar-title,
+.return-button,
+.trial-progress {
+  transition: grid-template-rows .28s ease, opacity .28s ease, transform .28s ease, color .2s ease, border-color .2s ease, background .28s ease, box-shadow .28s ease;
+}
+
+.game-shell.is-run-active {
+  grid-template-rows: calc(50px + env(safe-area-inset-top)) 1fr;
+}
+
+.game-shell.is-run-active .game-bar {
+  min-height: calc(50px + env(safe-area-inset-top));
+  padding: max(3px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 3px max(8px, env(safe-area-inset-left));
+  border-bottom-color: rgba(255, 255, 255, .045);
+  background: rgba(6, 7, 24, .78);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.game-shell.is-run-active .game-bar-title {
+  opacity: .38;
+  transform: scale(.94);
+}
+
+.game-shell.is-run-active .game-bar-title .eyebrow {
+  display: none;
+}
+
+.game-shell.is-run-active .game-bar-title strong {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.game-shell.is-run-active .return-button {
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  padding-inline: 10px;
+  border-color: transparent;
+  color: rgba(255, 248, 223, .72);
+  background: rgba(255, 255, 255, .018);
+  box-shadow: none;
+}
+
+.game-shell.is-run-active .return-button:hover,
+.game-shell.is-run-active .return-button:focus-visible {
+  color: var(--cyan-bright);
+  border-color: rgba(130, 244, 238, .38);
+  background: rgba(130, 244, 238, .07);
+}
+
+.game-shell.is-run-active .trial-progress {
+  opacity: .68;
+}
+
+@media (max-width: 620px) {
+  .game-shell.is-run-active .game-bar {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: calc(50px + env(safe-area-inset-top));
+  }
+
+  .game-shell.is-run-active .game-bar-title {
+    justify-self: end;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .game-shell.is-run-active .return-button {
+    font-size: 12px;
+    letter-spacing: .06em;
+  }
 }

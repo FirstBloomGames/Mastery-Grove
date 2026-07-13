@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#09091d">
   <meta name="description" content="Lumenloom — weave light through a moonlit garden in this original arcade game from First Bloom Games.">
   <title>Lumenloom — A First Bloom Games Original</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.2">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.3">
   <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.2">
+  <meta name="first-bloom-release" content="0.4.0-rc.3">
 </head>
 <body>
   <main id="app" aria-label="Lumenloom game">
@@ -46,6 +46,7 @@
       <div id="objectiveCard" class="objective-card glass">
         <span id="objectiveKicker" class="eyebrow">THE GARDEN REMEMBERS</span>
         <div class="objective-row">
+          <span class="objective-mark" aria-hidden="true">&#10022;</span>
           <strong id="objectiveText">Find a flower and take up the thread</strong>
           <span id="objectiveProgress">0 / 1</span>
         </div>
@@ -91,9 +92,10 @@
       </div>
 
       <button id="weaveButton" class="weave-button" type="button" aria-label="Weave light">
-        <span class="weave-icon" aria-hidden="true">✦</span>
+        <span class="weave-icon weave-icon-open" aria-hidden="true">&#10022;</span>
+        <span class="weave-icon weave-icon-close" aria-hidden="true">&#9671;</span>
         <span class="weave-copy">
-          <small>THREAD</small>
+          <small><span class="weave-mode-open">THREAD</span><span class="weave-mode-close">CLOSE LOOP</span></small>
           <span id="weaveButtonLabel">WEAVE</span>
         </span>
       </button>
@@ -204,6 +206,6 @@
       <small>Lumenloom blooms in portrait.</small>
     </div>
   </main>
-  <script src="game.js?v=0.4.0-rc.2"></script>
+  <script src="game.js?v=0.4.0-rc.3"></script>
 </body>
 </html>

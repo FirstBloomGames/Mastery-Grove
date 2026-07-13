@@ -1699,3 +1699,270 @@ kbd { font-size: 11px; }
     height: 92px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   D-023 — quiet play chrome and tactile portrait controls
+   Critical numbers stay bright; supporting glass recedes between moments.
+   -------------------------------------------------------------------------- */
+
+.objective-mark,
+.weave-icon-close,
+.weave-mode-close {
+  display: none;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .phase-block,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .hud-actions,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-card {
+  transition: opacity .38s ease, border-color .38s ease, background-color .38s ease, box-shadow .38s ease, transform .38s ease;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .phase-block {
+  opacity: .58;
+  border-color: rgba(255, 248, 218, .08);
+  background: rgba(8, 8, 28, .46);
+  box-shadow: none;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .hud-actions {
+  opacity: .66;
+  border-color: rgba(255, 248, 218, .08);
+  background: rgba(8, 8, 28, .52);
+  box-shadow: none;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .hud-actions:hover,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .hud-actions:focus-within {
+  opacity: 1;
+  border-color: rgba(255, 217, 119, .26);
+  background: rgba(8, 8, 28, .9);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-card {
+  width: min(330px, calc(100vw - 38px));
+  padding: 6px 10px 7px;
+  opacity: .72;
+  border-color: rgba(255, 217, 119, .12);
+  background: rgba(8, 8, 28, .48);
+  box-shadow: 0 7px 22px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  transform: translateX(-50%) translateY(-2px) scale(.98);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-mark {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-size: 11px;
+  filter: drop-shadow(0 0 6px rgba(255, 217, 119, .35));
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-row strong {
+  color: rgba(255, 248, 218, .84);
+  font-size: 11px;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) #objectiveProgress {
+  color: rgba(255, 217, 119, .92);
+  font-size: 11px;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-track {
+  height: 1px;
+  margin: 4px 1px 0 25px;
+  opacity: .72;
+}
+
+/* The phase banner is the existing state-transition hook. Supporting chrome
+   briefly returns to full strength, then settles back when the banner clears. */
+#app:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]):has(.phase-banner.is-visible) .phase-block,
+#app:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]):has(.phase-banner.is-visible) .objective-card {
+  opacity: .96;
+  border-color: rgba(255, 217, 119, .27);
+  background: rgba(8, 8, 28, .82);
+  transform: translateX(0) translateY(0) scale(1);
+}
+
+#app:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]):has(.phase-banner.is-visible) .objective-card {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Lumen and Health are never part of the receding layer. */
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-stack {
+  opacity: 1;
+  border-color: rgba(255, 217, 119, .4);
+  background: linear-gradient(145deg, rgba(6, 6, 24, .95), rgba(14, 12, 38, .92));
+  box-shadow: 0 15px 38px rgba(0, 0, 0, .38), inset 0 1px rgba(255, 255, 255, .08), 0 0 24px rgba(255, 217, 119, .07);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-number,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .health-value {
+  color: var(--paper);
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: 0 2px 12px #000, 0 0 12px rgba(255, 217, 119, .24);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .health-value {
+  color: #ffb3ca;
+  text-shadow: 0 2px 12px #000, 0 0 12px rgba(255, 118, 157, .34);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-label {
+  color: rgba(255, 248, 218, .78);
+  font-size: 9px;
+  letter-spacing: .06em;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .petals {
+  opacity: .74;
+}
+
+/* The inactive guide is only a landmark. The live stick blooms exactly under
+   the contact point; delayed position reset lets it fade where it was released. */
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-move-guide {
+  opacity: .34;
+  transform: scale(.9);
+  transition: opacity .2s ease, transform .24s ease, border-color .2s ease;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-move-zone.is-active .mobile-move-guide,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-move-zone[data-active="true"] .mobile-move-guide {
+  opacity: .08;
+  transform: scale(.78);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick {
+  width: 82px;
+  height: 82px;
+  border-color: rgba(115, 232, 210, .52);
+  background: radial-gradient(circle, rgba(7, 7, 28, .72) 0 51%, rgba(115, 232, 210, .12) 52% 69%, rgba(7, 7, 28, .56) 70%);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .34), 0 0 0 6px rgba(115, 232, 210, .07), inset 0 0 24px rgba(115, 232, 210, .1);
+  transform: translate(-50%, -50%) scale(.82);
+  transition: opacity .2s ease, transform .2s ease, left 0s linear .2s, top 0s linear .2s;
+  will-change: left, top, opacity, transform;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border: 1px solid rgba(115, 232, 210, .22);
+  border-radius: 50%;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-move-zone.is-active .mobile-stick,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-move-zone[data-active="true"] .mobile-stick,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick.is-active,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick[data-active="true"] {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transition: opacity .08s ease, transform .12s ease, left 0s, top 0s;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick-knob {
+  width: 36px;
+  height: 36px;
+  box-shadow: 0 0 28px rgba(115, 232, 210, .5), 0 6px 14px rgba(0, 0, 0, .34);
+}
+
+/* WEAVE is a round golden opening action. RELEASE becomes a cyan closing
+   sigil with a different silhouette, icon, sublabel, and material. */
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button {
+  overflow: visible;
+  transition: transform .14s ease, border-radius .24s ease, color .24s ease, background .24s ease, border-color .24s ease, box-shadow .24s ease;
+  will-change: transform;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(20, 17, 38, .16);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-icon-close,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-mode-close {
+  display: none;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel {
+  border-width: 2px;
+  border-radius: 31% 13% 31% 13%;
+  background: linear-gradient(145deg, rgba(22, 45, 61, .98), rgba(8, 14, 35, .98));
+  box-shadow: 0 12px 38px rgba(0, 0, 0, .42), 0 0 0 7px rgba(115, 232, 210, .12), 0 0 30px rgba(115, 232, 210, .16), inset 0 0 25px rgba(115, 232, 210, .12);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel::before {
+  border-color: rgba(115, 232, 210, .25);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel .weave-icon-open,
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel .weave-mode-open {
+  display: none;
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel .weave-icon-close {
+  display: block;
+  color: var(--cyan);
+  font-size: 35px;
+  filter: drop-shadow(0 0 9px rgba(115, 232, 210, .5));
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel .weave-mode-close {
+  display: inline;
+  color: rgba(201, 255, 250, .68);
+}
+
+:where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .weave-button.is-cancel #weaveButtonLabel {
+  color: var(--paper);
+  letter-spacing: .12em;
+}
+
+@media (max-height: 610px) and (orientation: portrait) {
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-number,
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .health-value {
+    font-size: 13px;
+  }
+
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-label {
+    font-size: 8px;
+  }
+
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .mobile-stick {
+    width: 74px;
+    height: 74px;
+  }
+}
+
+@media (max-width: 340px) and (max-height: 610px) and (orientation: portrait) {
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .resource-number,
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .health-value {
+    font-size: 14px;
+  }
+
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .petals {
+    display: none;
+  }
+
+  :where(.profile-mobile-portrait, [data-control-profile="mobile-portrait"]) .objective-card {
+    width: calc(100vw - 26px);
+  }
+}
