@@ -23,6 +23,7 @@
   const sessionId = pageParams.get("session") || "";
   const messageTargetOrigin = window.location.protocol === "file:" ? "*" : window.location.origin;
   const isEmbedded = window.parent !== window;
+  const isGroveHosted = isEmbedded && pageParams.get("grove") === "1";
 
   const ui = {
     app: $("app"),
@@ -61,6 +62,12 @@
     toast: $("toast"),
     liveRegion: $("liveRegion"),
   };
+
+  if (isGroveHosted) {
+    document.documentElement.dataset.groveHosted = "true";
+    ui.fullscreenButton.hidden = true;
+    ui.fullscreenButton.disabled = true;
+  }
 
   const COLORS = Object.freeze({
     ink: "#03100f",
@@ -2486,6 +2493,7 @@
   }
 
   function toggleFullscreen() {
+    if (isGroveHosted) return;
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.().catch(() => {});
     } else {

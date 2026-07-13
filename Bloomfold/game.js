@@ -13,6 +13,7 @@
   const sessionId = pageParams.get('session') || '';
   const messageTargetOrigin = window.location.protocol === 'file:' ? '*' : window.location.origin;
   const isEmbedded = window.parent !== window;
+  const isGroveHosted = isEmbedded && pageParams.get('grove') === '1';
 
   const fractalCanvas = $('fractalCanvas');
   const gameCanvas = $('gameCanvas');
@@ -60,6 +61,12 @@
     resultPerfects: $('resultPerfects'),
     specimenCode: $('specimenCode')
   };
+
+  if (isGroveHosted) {
+    document.documentElement.dataset.groveHosted = 'true';
+    ui.fullscreenButton.hidden = true;
+    ui.fullscreenButton.disabled = true;
+  }
 
   const view = {
     width: 0,
@@ -1735,6 +1742,7 @@
   ui.pauseButton.addEventListener('click', pauseGame);
   ui.soundButton.addEventListener('click', () => audio.toggle());
   ui.fullscreenButton.addEventListener('click', async () => {
+    if (isGroveHosted) return;
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       else await document.exitFullscreen();

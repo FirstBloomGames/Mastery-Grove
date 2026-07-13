@@ -12,6 +12,7 @@
   const sessionId = pageParams.get('session') || '';
   const messageTargetOrigin = window.location.protocol === 'file:' ? '*' : window.location.origin;
   const isEmbedded = window.parent !== window;
+  const isGroveHosted = isEmbedded && pageParams.get('grove') === '1';
 
   const ui = {
     app: $('app'),
@@ -65,6 +66,12 @@
     mobileStick: $('mobileStick'),
     mobileStickKnob: $('mobileStickKnob')
   };
+
+  if (isGroveHosted) {
+    document.documentElement.dataset.groveHosted = 'true';
+    ui.fullscreenButton.hidden = true;
+    ui.fullscreenButton.disabled = true;
+  }
 
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -3610,6 +3617,7 @@
     toggleWeave();
   });
   ui.fullscreenButton.addEventListener('click', async () => {
+    if (isGroveHosted) return;
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       else await document.exitFullscreen();

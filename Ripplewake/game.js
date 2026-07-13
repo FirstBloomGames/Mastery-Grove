@@ -9,6 +9,7 @@
   const sessionId = pageParams.get("session") || "";
   const messageTargetOrigin = window.location.protocol === "file:" ? "*" : window.location.origin;
   const isEmbedded = window.parent !== window;
+  const isGroveHosted = isEmbedded && pageParams.get("grove") === "1";
 
   const canvas = document.getElementById("lakeCanvas");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -57,6 +58,12 @@
     replayButton: document.getElementById("replayButton"),
     homeButton: document.getElementById("homeButton")
   };
+
+  if (isGroveHosted) {
+    document.documentElement.dataset.groveHosted = "true";
+    ui.fullscreenButton.hidden = true;
+    ui.fullscreenButton.disabled = true;
+  }
 
   const COLORS = {
     pearl: "#f4ffe8",
@@ -1615,6 +1622,7 @@
   }
 
   function toggleFullscreen() {
+    if (isGroveHosted) return;
     const target = document.documentElement;
     if (!document.fullscreenElement) {
       target.requestFullscreen?.().catch(() => showToast("FULLSCREEN IS NOT AVAILABLE HERE", COLORS.coral));

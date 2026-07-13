@@ -1,6 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.4**
+Current build: **0.4.0-rc.5**
+
+This hotfix guarantees a visible route back to the Grove from every embedded game. Grove-hosted games no longer expose child-only fullscreen, and the parent iframe no longer grants fullscreen permission that could cover the persistent Return rail. The Grove header now owns an isolated, clipped grid row above the iframe. Standalone and portal builds retain their own fullscreen capability.
 
 This hotfix addresses real-phone lag in the Mastery Grove selection screen. Mobile now uses a bounded canvas pixel budget and 24 FPS ambient scheduler, suspends decorative drawing during touch/scroll, hidden, modal, and active-game states, removes live mobile backdrop blur and animated grain, reduces paint-heavy effects, and skips offscreen card rendering. Desktop retains the full visual treatment. A dedicated performance contract prevents these budgets from regressing.
 
