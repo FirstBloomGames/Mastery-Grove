@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#070817">
   <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
   <title>First Bloom: The Mastery Grove</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.5">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.6">
   <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.5">
+  <meta name="first-bloom-release" content="0.4.0-rc.6">
 </head>
 <body>
   <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
@@ -56,6 +56,15 @@
               <p id="groveMessage">Three arcade seeds are awake. Every finished run feeds its own tree.</p>
             </div>
           </div>
+          <div id="visitHarmony" class="visit-harmony glass" aria-live="polite">
+            <span class="eyebrow">THIS VISIT</span>
+            <div class="visit-harmony-copy">
+              <strong id="visitHarmonyStatus">0 / 3 TREES TO GROVE HARMONY</strong>
+              <span class="visit-voice-pips" aria-hidden="true">
+                <i id="lumenloomVisitPip"></i><i id="bloomfoldVisitPip"></i><i id="ripplewakeVisitPip"></i>
+              </span>
+            </div>
+          </div>
           <button id="trialButton" class="trial-button" type="button">
             <span><small>THE FIRST GROVE TRIAL</small><strong id="trialLabel">COMPLETE ALL THREE TREES TO AWAKEN</strong></span>
             <i aria-hidden="true">◇</i>
@@ -67,6 +76,7 @@
           <div class="game-emblem lumenloom-emblem" aria-hidden="true">
             <i></i><i></i><i></i><i></i><span>✦</span>
           </div>
+          <span id="lumenloomVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
           <span class="eyebrow">THE LANTERN WILLOW</span>
           <h2>LUMENLOOM</h2>
           <p>Stitch flowers into luminous shapes and wake a garden from shadow.</p>
@@ -76,6 +86,10 @@
             <div><span>BEST RUN</span><strong id="lumenloomBest">0</strong></div>
           </div>
           <div class="rank-track" role="progressbar" aria-label="Lumenloom tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="lumenloomProgress"></i></div>
+          <div id="lumenloomNextReward" class="next-reward" aria-label="Lumenloom next rewards">
+            <span><small>NEXT GROWTH</small><strong id="lumenloomNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="lumenloomNextSkill">CALCULATING</strong></span>
+          </div>
           <button class="enter-button" type="button" data-play="lumenloom"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
           <small>TYPICAL RUN: 3–5 MINUTES · MOVE &amp; WEAVE</small>
         </article>
@@ -85,6 +99,7 @@
           <div class="game-emblem bloomfold-emblem" aria-hidden="true">
             <i></i><i></i><i></i><i></i><i></i><i></i><span>◇</span>
           </div>
+          <span id="bloomfoldVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
           <span class="eyebrow">THE RECURSIVE ORCHID</span>
           <h2>BLOOMFOLD</h2>
           <p>Orbit through a living fractal and preserve the pattern your choices create.</p>
@@ -94,6 +109,10 @@
             <div><span>BEST RUN</span><strong id="bloomfoldBest">0</strong></div>
           </div>
           <div class="rank-track" role="progressbar" aria-label="Bloomfold tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="bloomfoldProgress"></i></div>
+          <div id="bloomfoldNextReward" class="next-reward" aria-label="Bloomfold next rewards">
+            <span><small>NEXT GROWTH</small><strong id="bloomfoldNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="bloomfoldNextSkill">CALCULATING</strong></span>
+          </div>
           <button class="enter-button" type="button" data-play="bloomfold"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
           <small>TYPICAL RUN: 90 SECONDS · POINT TO ORBIT</small>
         </article>
@@ -103,6 +122,7 @@
           <div class="game-emblem ripplewake-emblem" aria-hidden="true">
             <i></i><i></i><i></i><span>≋</span>
           </div>
+          <span id="ripplewakeVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
           <span class="eyebrow">THE ECHO ALDER</span>
           <h2>RIPPLEWAKE</h2>
           <p>Skip moonstones across a living lake and bloom the water with every perfect touch.</p>
@@ -112,6 +132,10 @@
             <div><span>BEST RUN</span><strong id="ripplewakeBest">0</strong></div>
           </div>
           <div class="rank-track" role="progressbar" aria-label="Ripplewake tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="ripplewakeProgress"></i></div>
+          <div id="ripplewakeNextReward" class="next-reward" aria-label="Ripplewake next rewards">
+            <span><small>NEXT GROWTH</small><strong id="ripplewakeNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="ripplewakeNextSkill">CALCULATING</strong></span>
+          </div>
           <button class="enter-button" type="button" data-play="ripplewake"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
           <small>TYPICAL RUN: 70–75 SECONDS · AIM &amp; TIME</small>
         </article>
@@ -121,6 +145,7 @@
           <div class="game-emblem prismbind-emblem" aria-hidden="true">
             <i></i><i></i><i></i><span>◆</span>
           </div>
+          <span id="prismbindVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
           <span class="eyebrow">THE CONCORD BANYAN</span>
           <h2 id="prismbindTitle">PRISMBIND</h2>
           <p>Prove all three foundational disciplines, then awaken the living Crownheart.</p>
@@ -135,6 +160,10 @@
             <div><span>BEST RUN</span><strong id="prismbindBest">0</strong></div>
           </div>
           <div class="rank-track" role="progressbar" aria-label="Prismbind tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prismbindProgress"></i></div>
+          <div id="prismbindNextReward" class="next-reward" aria-label="Prismbind next rewards">
+            <span><small>NEXT GROWTH</small><strong id="prismbindNextGrowth">CALCULATING</strong></span>
+            <span><small>GUARDIAN PATH</small><strong id="prismbindNextSkill">CALCULATING</strong></span>
+          </div>
           <button id="prismbindButton" class="enter-button" type="button" data-play="prismbind" disabled><span id="prismbindButtonLabel">EARN 3 MASTERY SEEDS</span><i aria-hidden="true">◆</i></button>
           <small id="prismbindRequirement">0 / 3 SEEDS · PEAK SKILL, NOT TREE TOTAL</small>
         </article>
@@ -175,15 +204,20 @@
     </section>
 
     <section id="growthOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="growthTitle" aria-describedby="growthCopy" aria-hidden="true" inert>
-      <div class="growth-panel ornate-panel">
+      <div id="growthPanel" class="growth-panel ornate-panel">
+        <div id="scoreStream" class="score-stream" aria-hidden="true"></div>
         <span id="growthSymbol" class="growth-symbol" aria-hidden="true">✦</span>
         <span id="ceremonyKicker" class="eyebrow">THE GROVE REMEMBERS</span>
         <h2 id="growthTitle">A branch has awakened.</h2>
         <p id="growthCopy">This run’s score became part of its tree.</p>
+        <div id="growthOutcome" class="growth-outcome is-hidden">POINTS TOOK ROOT</div>
         <div class="growth-stats">
           <div><span id="growthRunLabel">RUN SCORE</span><strong id="growthRunScore">0</strong></div>
           <div><span id="growthScoreLabel">TREE TOTAL</span><strong id="growthScore">0</strong></div>
           <div><span id="growthMasteryLabel">GROWTH</span><strong id="growthMastery">BUD</strong></div>
+        </div>
+        <div id="ceremonyNextReward" class="ceremony-next-reward">
+          <span>NEXT REWARD</span><strong id="growthNextReward">KEEP GROWING</strong>
         </div>
         <button id="growthContinueButton" class="primary-button" type="button"><span>SEE THE GROVE</span><i aria-hidden="true">→</i></button>
       </div>
@@ -210,6 +244,13 @@
         <span class="eyebrow">KEEPER OPTIONS</span>
         <h2 id="settingsTitle">Grove settings</h2>
         <p>Progress is stored only in this browser profile. Export a backup before changing browsers or clearing site data.</p>
+        <div class="sound-setting">
+          <div>
+            <strong>TREE VOICES</strong>
+            <small>Brief synthesized notes answer selection and growth. No ambient loop.</small>
+          </div>
+          <button id="groveSoundButton" class="sound-toggle" type="button" aria-pressed="true">SOUND ON</button>
+        </div>
         <div class="data-actions" aria-label="Local profile data controls">
           <button id="exportProgressButton" class="text-button" type="button">Export progress backup</button>
           <button id="importProgressButton" class="text-button" type="button">Import progress backup</button>
@@ -263,7 +304,7 @@
 
   <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
 
-  <script src="progression.js?v=0.4.0-rc.5"></script>
-  <script src="grove.js?v=0.4.0-rc.5"></script>
+  <script src="progression.js?v=0.4.0-rc.6"></script>
+  <script src="grove.js?v=0.4.0-rc.6"></script>
 </body>
 </html>

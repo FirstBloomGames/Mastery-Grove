@@ -1,6 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.5**
+Current build: **0.4.0-rc.6**
+
+This candidate makes the Mastery Grove itself answer the player without restoring continuous visual cost. Every tree now responds immediately to selection, exposes its next growth and skill reward, remembers completed trees for the current visit, and receives accepted scores through a save-first return ceremony with an exact total count-up. Strict personal bests, matched bests, and runs within 90% of the prior lane best receive honest outcome language. Completing all three foundational games in one visit awakens one decorative Grove Harmony. Four short locally synthesized tree voices are optional through a dedicated Grove sound control; reduced motion resolves the same information without score travel or motes. All new effects are discrete, capped, dependency-free, and return to rest.
 
 This hotfix guarantees a visible route back to the Grove from every embedded game. Grove-hosted games no longer expose child-only fullscreen, and the parent iframe no longer grants fullscreen permission that could cover the persistent Return rail. The Grove header now owns an isolated, clipped grid row above the iframe. Standalone and portal builds retain their own fullscreen capability.
 

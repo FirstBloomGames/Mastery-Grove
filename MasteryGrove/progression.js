@@ -426,6 +426,151 @@
     return deepFreeze({ ok: true, code: "ok", ...seedEligibilityCanonical(profile, validated.result) });
   }
 
+  function classifyRunFeedback(beforeRecord, rawResult) {
+    if (!isPlainObject(beforeRecord)
+      || !isCounter(beforeRecord.standardBest)
+      || !isCounter(beforeRecord.assistedBest)) return null;
+    const validated = validateRunResult(rawResult);
+    if (!validated.ok) return null;
+    const result = validated.result;
+    const lane = result.assisted ? "assisted" : "standard";
+    const priorBest = result.assisted ? beforeRecord.assistedBest : beforeRecord.standardBest;
+    // Subtracting floor(best / 10) is an overflow-safe ceil(best * 0.9).
+    const nearBestThreshold = priorBest > 0
+      ? priorBest - Math.floor(priorBest / 10)
+      : 0;
+    const isPersonalBest = result.score > priorBest;
+    const matchedBest = priorBest > 0 && result.score === priorBest;
+    const nearBest = priorBest > 0
+      && result.score < priorBest
+      && result.score >= nearBestThreshold;
+    return deepFreeze({
+      priorBest,
+      isPersonalBest,
+      matchedBest,
+      nearBest,
+      gap: result.score < priorBest ? priorBest - result.score : 0,
+      lane
+    });
+  }
+
+  function formatCounter(value) {
+    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function rewardDescriptor(fields) {
+    return deepFreeze(fields);
+  }
+
+  function nextRewardFor(profile, gameId) {
+    if (!isCanonicalProfile(profile) || !ALL_GAME_IDS.includes(gameId)) return null;
+
+    const definition = GAME_DEFINITIONS[gameId];
+    const record = profile.games[gameId];
+    const growth = growthFor(gameId, record.totalScore);
+    const nextGrowthStage = growth.nextThreshold === null ? null : GROWTH_STAGES[growth.level + 1];
+    const growthLabel = growth.nextThreshold === null
+      ? "TREE IN FULL BLOOM"
+      : `${formatCounter(growth.pointsToNext)} TREE ${growth.pointsToNext === 1 ? "POINT" : "POINTS"} TO ${nextGrowthStage}`;
+    const growthFields = {
+      growthCurrent: record.totalScore,
+      growthTarget: growth.nextThreshold,
+      growthRemaining: growth.pointsToNext,
+      nextGrowthStage
+    };
+
+    if (gameId === "prismbind" && !profile.unlocks.prismbind) {
+      const seedCount = FOUNDATIONAL_GAME_IDS.filter((id) => profile.games[id].masterySeed).length;
+      const remaining = Math.max(0, FOUNDATIONAL_GAME_IDS.length - seedCount);
+      const skillLabel = `${remaining} MASTERY ${remaining === 1 ? "SEED" : "SEEDS"} TO AWAKEN PRISMBIND`;
+      return rewardDescriptor({
+        gameId,
+        kind: "tree-unlock",
+        metric: "mastery-seeds",
+        current: seedCount,
+        target: FOUNDATIONAL_GAME_IDS.length,
+        remaining,
+        nextStage: "PRISMBIND",
+        requiresVictory: false,
+        growthLabel: "TREE SLEEPING",
+        skillLabel,
+        ...growthFields
+      });
+    }
+
+    if (gameId === "prismbind" && !profile.regions.secondGroveUnlocked) {
+      const skillLabel = "DEFEAT THE GUARDIAN TO REVEAL THE NEXT CLEARING";
+      return rewardDescriptor({
+        gameId,
+        kind: "guardian-victory",
+        metric: "victory",
+        current: 0,
+        target: 1,
+        remaining: 1,
+        nextStage: "SECOND GROVE",
+        requiresVictory: true,
+        growthLabel,
+        skillLabel,
+        ...growthFields
+      });
+    }
+
+    if (definition.foundational && !record.masterySeed) {
+      const currentBest = Math.max(record.standardBest, record.assistedBest);
+      const remaining = Math.max(0, definition.seedThreshold - currentBest);
+      const skillLabel = definition.seedRequiresVictory
+        ? remaining > 0
+          ? `${formatCounter(remaining)} BEST-RUN ${remaining === 1 ? "POINT" : "POINTS"} TO SEED · VICTORY REQUIRED`
+          : `WIN WITH ${formatCounter(definition.seedThreshold)} OR MORE TO EARN THE SEED`
+        : remaining > 0
+          ? `${formatCounter(remaining)} BEST-RUN ${remaining === 1 ? "POINT" : "POINTS"} TO MASTERY SEED`
+          : `SCORE ${formatCounter(definition.seedThreshold)} OR MORE IN ONE RUN`;
+      return rewardDescriptor({
+        gameId,
+        kind: "mastery-seed",
+        metric: "best-run",
+        current: currentBest,
+        target: definition.seedThreshold,
+        remaining,
+        nextStage: "MASTERY SEED",
+        requiresVictory: definition.seedRequiresVictory,
+        growthLabel,
+        skillLabel,
+        ...growthFields
+      });
+    }
+
+    if (growth.nextThreshold === null) {
+      return rewardDescriptor({
+        gameId,
+        kind: "full-bloom",
+        metric: "complete",
+        current: record.totalScore,
+        target: null,
+        remaining: 0,
+        nextStage: null,
+        requiresVictory: false,
+        growthLabel,
+        skillLabel: gameId === "prismbind" ? "NEXT CLEARING REVEALED" : "MASTERY SEED EARNED",
+        ...growthFields
+      });
+    }
+
+    return rewardDescriptor({
+      gameId,
+      kind: "growth-stage",
+      metric: "tree-total",
+      current: record.totalScore,
+      target: growth.nextThreshold,
+      remaining: growth.pointsToNext,
+      nextStage: nextGrowthStage,
+      requiresVictory: false,
+      growthLabel,
+      skillLabel: gameId === "prismbind" ? "NEXT CLEARING REVEALED" : "MASTERY SEED EARNED",
+      ...growthFields
+    });
+  }
+
   function growthReward(gameId, level) {
     return deepFreeze({
       type: "growth-stage",
@@ -786,6 +931,8 @@
     isGameUnlocked,
     validateRunResult,
     seedEligibility,
+    classifyRunFeedback,
+    nextRewardFor,
     applyResult,
     pendingRewards,
     acknowledgeCeremony,

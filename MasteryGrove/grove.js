@@ -8,9 +8,21 @@
   if (!progression) throw new Error('Mastery Grove progression engine did not load.');
   const STORAGE_KEY = 'first-bloom-grove-v1';
   const BACKUP_STORAGE_KEY = 'first-bloom-grove-v1-backup';
+  const GROVE_SOUND_KEY = 'first-bloom-grove-audio-v1';
   const PROFILE_VERSION = progression.PROFILE_VERSION;
   const COLLECTION_SIZE = 10;
   const TAU = Math.PI * 2;
+  const SCORE_COUNT_DURATION_MS = 680;
+  const SCORE_COUNT_MAX_WRITES = 20;
+  const SCORE_MOTE_CAP_DESKTOP = 10;
+  const SCORE_MOTE_CAP_MOBILE = 6;
+
+  const TREE_VOICES = Object.freeze({
+    lumenloom: Object.freeze({ select: Object.freeze([392, 587.33]), growth: Object.freeze([587.33, 783.99]), wave: 'sine' }),
+    bloomfold: Object.freeze({ select: Object.freeze([329.63, 493.88]), growth: Object.freeze([493.88, 659.25]), wave: 'triangle' }),
+    ripplewake: Object.freeze({ select: Object.freeze([261.63, 392]), growth: Object.freeze([392, 523.25]), wave: 'sine' }),
+    prismbind: Object.freeze({ select: Object.freeze([293.66, 440]), growth: Object.freeze([440, 659.25]), wave: 'triangle' })
+  });
 
   const GAMES = {
     lumenloom: {
@@ -66,23 +78,44 @@
     headerBloomCount: $('headerBloomCount'),
     groveRank: $('groveRank'),
     groveMessage: $('groveMessage'),
+    firstTree: document.querySelector('.first-tree'),
+    visitHarmony: $('visitHarmony'),
+    visitHarmonyStatus: $('visitHarmonyStatus'),
+    lumenloomVisitPip: $('lumenloomVisitPip'),
+    bloomfoldVisitPip: $('bloomfoldVisitPip'),
+    ripplewakeVisitPip: $('ripplewakeVisitPip'),
+    lumenloomCard: $('lumenloomCard'),
     lumenloomMastery: $('lumenloomMastery'),
     lumenloomTotal: $('lumenloomTotal'),
     lumenloomBest: $('lumenloomBest'),
     lumenloomProgress: $('lumenloomProgress'),
+    lumenloomNextGrowth: $('lumenloomNextGrowth'),
+    lumenloomNextSkill: $('lumenloomNextSkill'),
+    lumenloomVisitMark: $('lumenloomVisitMark'),
+    bloomfoldCard: $('bloomfoldCard'),
     bloomfoldMastery: $('bloomfoldMastery'),
     bloomfoldTotal: $('bloomfoldTotal'),
     bloomfoldBest: $('bloomfoldBest'),
     bloomfoldProgress: $('bloomfoldProgress'),
+    bloomfoldNextGrowth: $('bloomfoldNextGrowth'),
+    bloomfoldNextSkill: $('bloomfoldNextSkill'),
+    bloomfoldVisitMark: $('bloomfoldVisitMark'),
+    ripplewakeCard: $('ripplewakeCard'),
     ripplewakeMastery: $('ripplewakeMastery'),
     ripplewakeTotal: $('ripplewakeTotal'),
     ripplewakeBest: $('ripplewakeBest'),
     ripplewakeProgress: $('ripplewakeProgress'),
+    ripplewakeNextGrowth: $('ripplewakeNextGrowth'),
+    ripplewakeNextSkill: $('ripplewakeNextSkill'),
+    ripplewakeVisitMark: $('ripplewakeVisitMark'),
     prismbindCard: $('prismbindCard'),
     prismbindMastery: $('prismbindMastery'),
     prismbindTotal: $('prismbindTotal'),
     prismbindBest: $('prismbindBest'),
     prismbindProgress: $('prismbindProgress'),
+    prismbindNextGrowth: $('prismbindNextGrowth'),
+    prismbindNextSkill: $('prismbindNextSkill'),
+    prismbindVisitMark: $('prismbindVisitMark'),
     prismbindButton: $('prismbindButton'),
     prismbindButtonLabel: $('prismbindButtonLabel'),
     prismbindRequirement: $('prismbindRequirement'),
@@ -102,16 +135,21 @@
     introOverlay: $('introOverlay'),
     enterGroveButton: $('enterGroveButton'),
     growthOverlay: $('growthOverlay'),
+    growthPanel: $('growthPanel'),
+    scoreStream: $('scoreStream'),
     growthSymbol: $('growthSymbol'),
     ceremonyKicker: $('ceremonyKicker'),
     growthTitle: $('growthTitle'),
     growthCopy: $('growthCopy'),
+    growthOutcome: $('growthOutcome'),
     growthRunLabel: $('growthRunLabel'),
     growthRunScore: $('growthRunScore'),
     growthScoreLabel: $('growthScoreLabel'),
     growthScore: $('growthScore'),
     growthMasteryLabel: $('growthMasteryLabel'),
     growthMastery: $('growthMastery'),
+    ceremonyNextReward: $('ceremonyNextReward'),
+    growthNextReward: $('growthNextReward'),
     growthContinueButton: $('growthContinueButton'),
     trialResultOverlay: $('trialResultOverlay'),
     trialLumenScore: $('trialLumenScore'),
@@ -123,6 +161,7 @@
     settingsButton: $('settingsButton'),
     settingsOverlay: $('settingsOverlay'),
     closeSettingsButton: $('closeSettingsButton'),
+    groveSoundButton: $('groveSoundButton'),
     resetProgressButton: $('resetProgressButton'),
     exportProgressButton: $('exportProgressButton'),
     importProgressButton: $('importProgressButton'),
@@ -197,6 +236,21 @@
   let toastTimer = 0;
   let resetArmed = false;
   let resetTimer = 0;
+  let scoreCounterFrame = 0;
+  let scoreStreamTimer = 0;
+  let selectionReleaseTimer = 0;
+  let launchGuard = false;
+  const visitState = {
+    played: new Set(),
+    improved: new Set(),
+    harmonyQueued: false
+  };
+  let groveSoundEnabled = loadGroveSoundPreference();
+  let groveAudioContext = null;
+  let lastSelectionCueAt = 0;
+  let lastSelectionCueGame = '';
+  const activeAudioNodes = new Set();
+  const audioQa = { lastCue: null, maxActiveNodes: 0 };
   const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let reducedMotion = Boolean(motionQuery?.matches);
   let lastFrame = performance.now();
@@ -214,6 +268,202 @@
 
   function safeAdd(left, right) {
     return Math.min(Number.MAX_SAFE_INTEGER, safeInteger(left) + safeInteger(right));
+  }
+
+  function loadGroveSoundPreference() {
+    try { return localStorage.getItem(GROVE_SOUND_KEY) !== 'off'; }
+    catch (_) { return true; }
+  }
+
+  function persistGroveSoundPreference() {
+    try { localStorage.setItem(GROVE_SOUND_KEY, groveSoundEnabled ? 'on' : 'off'); }
+    catch (_) { /* A presentation preference never blocks play. */ }
+  }
+
+  function updateGroveSoundUI() {
+    if (!ui.groveSoundButton) return;
+    ui.groveSoundButton.setAttribute('aria-pressed', String(groveSoundEnabled));
+    ui.groveSoundButton.textContent = groveSoundEnabled ? 'SOUND ON' : 'SOUND OFF';
+    ui.groveSoundButton.setAttribute('aria-label', `Grove tree voices ${groveSoundEnabled ? 'on' : 'off'}`);
+  }
+
+  function stopActiveAudioNodes() {
+    for (const oscillator of [...activeAudioNodes]) {
+      try { oscillator.stop(); } catch (_) { /* Already stopped. */ }
+    }
+    activeAudioNodes.clear();
+  }
+
+  function ensureGroveAudioContext() {
+    if (!groveSoundEnabled) return null;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    try {
+      if (!groveAudioContext || groveAudioContext.state === 'closed') groveAudioContext = new AudioContextCtor();
+      return groveAudioContext;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function scheduleTreeVoice(context, gameId, kind) {
+    if (!groveSoundEnabled || !context || context.state !== 'running') return;
+    const voice = TREE_VOICES[gameId];
+    const frequencies = voice?.[kind] || voice?.select;
+    if (!voice || !frequencies) return;
+    stopActiveAudioNodes();
+    const now = context.currentTime + .012;
+    const duration = kind === 'growth' ? .28 : .22;
+    frequencies.slice(0, 2).forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + index * .036;
+      const stop = start + duration;
+      oscillator.type = voice.wave;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(.0001, start);
+      gain.gain.exponentialRampToValueAtTime(kind === 'growth' ? .024 : .018, start + .035);
+      gain.gain.exponentialRampToValueAtTime(.0001, stop);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      activeAudioNodes.add(oscillator);
+      audioQa.maxActiveNodes = Math.max(audioQa.maxActiveNodes, activeAudioNodes.size);
+      oscillator.onended = () => {
+        activeAudioNodes.delete(oscillator);
+        try { oscillator.disconnect(); gain.disconnect(); } catch (_) { /* Best-effort cleanup. */ }
+      };
+      oscillator.start(start);
+      oscillator.stop(stop + .01);
+    });
+    audioQa.lastCue = Object.freeze({ gameId, kind, frequencies: [...frequencies], at: Date.now() });
+  }
+
+  function playTreeVoice(gameId, kind = 'select') {
+    if (!groveSoundEnabled || !TREE_VOICES[gameId]) return;
+    const now = performance.now();
+    if (kind === 'select' && lastSelectionCueGame === gameId && now - lastSelectionCueAt < 160) return;
+    if (kind === 'select') {
+      lastSelectionCueGame = gameId;
+      lastSelectionCueAt = now;
+    }
+    const context = ensureGroveAudioContext();
+    if (!context) return;
+    if (context.state === 'running') scheduleTreeVoice(context, gameId, kind);
+    else context.resume().then(() => scheduleTreeVoice(context, gameId, kind)).catch(() => {});
+  }
+
+  function playGroveHarmony() {
+    if (!groveSoundEnabled) return;
+    FOUNDATIONAL_GAME_IDS.forEach((gameId, index) => {
+      window.setTimeout(() => playTreeVoice(gameId, 'select'), index * 290);
+    });
+    audioQa.lastCue = Object.freeze({ gameId: 'grove-harmony', kind: 'harmony', at: Date.now() });
+  }
+
+  function toggleGroveSound() {
+    groveSoundEnabled = !groveSoundEnabled;
+    if (!groveSoundEnabled) stopActiveAudioNodes();
+    persistGroveSoundPreference();
+    updateGroveSoundUI();
+    announce(`Grove tree voices ${groveSoundEnabled ? 'on' : 'off'}.`);
+    if (groveSoundEnabled) playTreeVoice('lumenloom', 'select');
+  }
+
+  function resetVisitState() {
+    visitState.played.clear();
+    visitState.improved.clear();
+    visitState.harmonyQueued = false;
+  }
+
+  function updateVisitUI() {
+    for (const gameId of GAME_IDS) {
+      const card = ui[`${gameId}Card`];
+      const mark = ui[`${gameId}VisitMark`];
+      const played = visitState.played.has(gameId);
+      const improved = visitState.improved.has(gameId);
+      card?.classList.toggle('is-session-played', played);
+      card?.classList.toggle('is-session-improved', improved);
+      if (card) card.dataset.visitState = improved ? 'improved' : played ? 'played' : 'resting';
+      if (mark) {
+        mark.textContent = improved ? 'PERSONAL BEST THIS VISIT' : 'AWAKE THIS VISIT';
+        mark.setAttribute('aria-hidden', String(!played));
+      }
+    }
+    const foundationalPlayed = FOUNDATIONAL_GAME_IDS.filter((gameId) => visitState.played.has(gameId));
+    for (const gameId of FOUNDATIONAL_GAME_IDS) ui[`${gameId}VisitPip`]?.classList.toggle('is-awake', visitState.played.has(gameId));
+    const harmonyAwake = foundationalPlayed.length === FOUNDATIONAL_GAME_IDS.length;
+    ui.visitHarmony?.classList.toggle('is-awake', harmonyAwake);
+    if (ui.visitHarmonyStatus) ui.visitHarmonyStatus.textContent = harmonyAwake
+      ? 'GROVE HARMONY AWAKE'
+      : `${foundationalPlayed.length} / 3 TREES TO GROVE HARMONY`;
+  }
+
+  function recordVisitCompletion(gameId, feedback) {
+    visitState.played.add(gameId);
+    if (feedback?.isPersonalBest) visitState.improved.add(gameId);
+    const harmonyReady = FOUNDATIONAL_GAME_IDS.every((id) => visitState.played.has(id));
+    if (harmonyReady && !visitState.harmonyQueued) {
+      visitState.harmonyQueued = true;
+      return true;
+    }
+    return false;
+  }
+
+  function clearScorePresentation(finalValue) {
+    if (scoreCounterFrame) cancelAnimationFrame(scoreCounterFrame);
+    scoreCounterFrame = 0;
+    clearTimeout(scoreStreamTimer);
+    scoreStreamTimer = 0;
+    ui.scoreStream?.replaceChildren();
+    if (finalValue !== undefined && ui.growthScore) ui.growthScore.textContent = formatNumber(finalValue);
+  }
+
+  function startScorePresentation(ceremony) {
+    clearScorePresentation();
+    const previousTotal = safeInteger(ceremony.previousTotal);
+    const totalScore = safeInteger(ceremony.totalScore);
+    ui.growthScore.setAttribute('aria-label', `Updated tree total ${formatNumber(totalScore)}`);
+    if (reducedMotion || previousTotal === totalScore) {
+      ui.growthScore.textContent = formatNumber(totalScore);
+      return;
+    }
+
+    const moteCount = isLikelyMobileRenderer() ? SCORE_MOTE_CAP_MOBILE : SCORE_MOTE_CAP_DESKTOP;
+    const offsets = [-54, 38, -22, 62, 8, -70, 48, -36, 76, 20];
+    for (let index = 0; index < moteCount; index += 1) {
+      const mote = document.createElement('i');
+      mote.style.setProperty('--start-x', `${offsets[index]}px`);
+      mote.style.setProperty('--delay', `${index * 42}ms`);
+      ui.scoreStream.appendChild(mote);
+    }
+    scoreStreamTimer = window.setTimeout(() => ui.scoreStream.replaceChildren(), 1100);
+
+    const startedAt = performance.now();
+    let lastWrite = -1;
+    const tick = (now) => {
+      const progressValue = Math.min(1, Math.max(0, (now - startedAt) / SCORE_COUNT_DURATION_MS));
+      const eased = 1 - Math.pow(1 - progressValue, 3);
+      const writeIndex = Math.min(SCORE_COUNT_MAX_WRITES, Math.floor(progressValue * SCORE_COUNT_MAX_WRITES));
+      if (writeIndex !== lastWrite) {
+        lastWrite = writeIndex;
+        ui.growthScore.textContent = formatNumber(previousTotal + Math.round((totalScore - previousTotal) * eased));
+      }
+      if (progressValue < 1) scoreCounterFrame = requestAnimationFrame(tick);
+      else {
+        scoreCounterFrame = 0;
+        ui.growthScore.textContent = formatNumber(totalScore);
+      }
+    };
+    ui.growthScore.textContent = formatNumber(previousTotal);
+    scoreCounterFrame = requestAnimationFrame(tick);
+  }
+
+  function highlightReturnedTree(gameId) {
+    const card = ui[`${gameId}Card`];
+    if (!card || reducedMotion) return;
+    card.classList.remove('is-score-received');
+    requestAnimationFrame(() => card.classList.add('is-score-received'));
+    window.setTimeout(() => card.classList.remove('is-score-received'), 900);
   }
 
   function defaultProfile() {
@@ -355,7 +605,7 @@
       // the complete registered game set rather than changing visual growth in
       // a performance-only hotfix.
       overallGrowth: (lumenGrowth.progress + bloomGrowth.progress + rippleGrowth.progress) / (GAME_IDS.length * 100),
-      guardianUnlocked: Boolean(profile?.unlocks?.tree04),
+      guardianUnlocked: Boolean(profile?.unlocks?.prismbind),
       guardianAwakened: Boolean(profile?.regions?.secondGroveUnlocked),
       secondGroveRevealed: Boolean(profile?.regions?.trees05To07Revealed)
     });
@@ -422,6 +672,7 @@
         ? `BEST ${formatNumber(profile.trialBest)} · BEGIN AGAIN`
         : 'PLAY ALL THREE TREES BACK TO BACK'
       : 'COMPLETE ALL THREE TREES TO AWAKEN';
+    updateVisitUI();
     updateStorageWarning();
   }
 
@@ -445,6 +696,15 @@
     track.setAttribute('aria-valuetext', growth.nextThreshold === null
       ? `${growth.name}, maximum growth`
       : `${growth.name}, ${formatNumber(growth.pointsToNext)} points to ${GROWTH_STAGES[growth.level + 1]}`);
+    const nextReward = progression.nextRewardFor(profile, gameId);
+    const nextGrowth = ui[`${gameId}NextGrowth`];
+    const nextSkill = ui[`${gameId}NextSkill`];
+    if (nextReward && nextGrowth && nextSkill) {
+      nextGrowth.textContent = nextReward.growthLabel;
+      nextSkill.textContent = nextReward.skillLabel;
+      const rewardGroup = nextGrowth.closest('.next-reward');
+      rewardGroup?.setAttribute('aria-label', `${GAMES[gameId].title} next growth: ${nextReward.growthLabel}. Next skill reward: ${nextReward.skillLabel}.`);
+    }
   }
 
   function buildSaplings() {
@@ -502,6 +762,9 @@
   }
 
   function openGame(gameId) {
+    if (launchGuard) return;
+    launchGuard = true;
+    window.setTimeout(() => { launchGuard = false; }, 240);
     const game = GAMES[gameId];
     if (!game || !progression.isGameUnlocked(profile, gameId)) {
       showToast('That tree is still sleeping. Earn its required Mastery Seeds first.');
@@ -656,6 +919,8 @@
     const gameId = result.gameId;
     const game = GAMES[gameId];
     const beforeRecord = profile.games[gameId];
+    const feedback = progression.classifyRunFeedback(beforeRecord, result);
+    const previousTotal = beforeRecord.totalScore;
     const oldGrowth = growthFor(gameId, beforeRecord.totalScore);
     const applied = progression.applyResult(profile, result);
     if (!applied.ok) {
@@ -663,22 +928,33 @@
       return;
     }
     profile = applied.profile;
+    saveProfile();
     const newGrowth = growthFor(gameId);
+    const nextReward = progression.nextRewardFor(profile, gameId);
     const growthStages = applied.rewards.filter((reward) => reward.type === 'growth-stage');
     const shouldShowRunGrowth = result.score > 0 && (!trialSession?.active || growthStages.length > 0);
+    const harmonyAwakened = recordVisitCompletion(gameId, feedback);
     if (shouldShowRunGrowth) {
       enqueueCeremony({
         type: 'run-growth',
         gameId,
         added: result.score,
+        previousTotal,
         totalScore: profile.games[gameId].totalScore,
         oldLevel: oldGrowth.level,
         newLevel: newGrowth.level,
-        mastery: newGrowth.name
+        mastery: newGrowth.name,
+        nextReward,
+        priorBest: feedback?.priorBest || 0,
+        isPersonalBest: Boolean(feedback?.isPersonalBest),
+        matchedBest: Boolean(feedback?.matchedBest),
+        nearBest: Boolean(feedback?.nearBest),
+        gap: feedback?.gap || 0,
+        lane: feedback?.lane || (result.assisted ? 'assisted' : 'standard')
       });
     }
     applied.rewards.filter((reward) => reward.type !== 'growth-stage').forEach(enqueueCeremony);
-    saveProfile();
+    if (harmonyAwakened) enqueueCeremony({ type: 'session-harmony', sourceGameId: gameId });
     updateProfileUI();
     buildSaplings();
     rendererState.growthPulse = reducedMotion ? 0 : 1;
@@ -687,9 +963,16 @@
     ui.returnButton.innerHTML = result.score > 0
       ? '<span aria-hidden="true">←</span> RETURN WITH SCORE'
       : '<span aria-hidden="true">←</span> RETURN TO GROVE';
-    showToast(result.score > 0
-      ? `${formatNumber(result.score)} added to ${game.tree}.`
-      : `The run completed. No points took root in ${game.tree} this time.`);
+    const resultToast = feedback?.isPersonalBest
+      ? `${formatNumber(result.score)} took root — a new ${feedback.lane} personal best.`
+      : feedback?.matchedBest
+        ? `${formatNumber(result.score)} took root and matched your ${feedback.lane} best.`
+        : feedback?.nearBest
+          ? `${formatNumber(result.score)} took root — only ${formatNumber(feedback.gap)} from your ${feedback.lane} best.`
+          : result.score > 0
+            ? `${formatNumber(result.score)} added to ${game.tree}.`
+            : `The run completed. No points took root in ${game.tree} this time.`;
+    showToast(resultToast);
 
     if (trialSession?.active) {
       trialSession.scores[gameId] = result.score;
@@ -707,27 +990,53 @@
   }
 
   function configureCeremony(ceremony) {
+    clearScorePresentation();
     const game = ceremony.gameId ? GAMES[ceremony.gameId] : null;
     const record = game ? profile.games[ceremony.gameId] : null;
+    const gameReward = game ? progression.nextRewardFor(profile, ceremony.gameId) : null;
     const seedCount = FOUNDATIONAL_GAME_IDS.filter((gameId) => profile.games[gameId].masterySeed).length;
     ui.growthSymbol.style.color = game?.color || '#d7c6ff';
     ui.growthSymbol.textContent = game?.symbol || '◆';
-    ui.growthContinueButton.dataset.returnGame = ceremony.gameId || 'prismbind';
+    ui.growthPanel.style.setProperty('--ceremony-color', game?.color || '#d7c6ff');
+    ui.growthPanel.classList.remove('is-personal-best', 'is-near-best');
+    ui.growthOutcome.classList.add('is-hidden');
+    ui.growthOutcome.textContent = '';
+    ui.growthScore.removeAttribute('aria-label');
+    ui.ceremonyNextReward.classList.remove('is-hidden');
+    ui.growthNextReward.textContent = 'KEEP GROWING';
+    ui.growthContinueButton.dataset.returnGame = ceremony.sourceGameId || ceremony.gameId || 'lumenloom';
+    ui.growthContinueButton.querySelector('span').textContent = 'SEE THE GROVE';
 
     if (ceremony.type === 'run-growth') {
-      ui.ceremonyKicker.textContent = 'THE GROVE REMEMBERS';
+      const laneLabel = ceremony.lane === 'assisted' ? 'ASSISTED' : 'STANDARD';
+      let outcome = 'POINTS TOOK ROOT';
+      if (ceremony.isPersonalBest) outcome = ceremony.priorBest > 0
+        ? `NEW ${laneLabel} PERSONAL BEST · +${formatNumber(ceremony.added - ceremony.priorBest)}`
+        : `FIRST ${laneLabel} PERSONAL BEST`;
+      else if (ceremony.matchedBest) outcome = `MATCHED ${laneLabel} PERSONAL BEST`;
+      else if (ceremony.nearBest) outcome = `NEAR BEST · ${formatNumber(ceremony.gap)} AWAY`;
+      ui.growthPanel.classList.toggle('is-personal-best', ceremony.isPersonalBest);
+      ui.growthPanel.classList.toggle('is-near-best', ceremony.nearBest);
+      ui.growthOutcome.classList.remove('is-hidden');
+      ui.growthOutcome.textContent = outcome;
+      ui.ceremonyKicker.textContent = ceremony.isPersonalBest ? 'THE TREE REMEMBERS YOUR BEST' : 'THE GROVE REMEMBERS';
       ui.growthTitle.textContent = ceremony.newLevel > ceremony.oldLevel
         ? `${game.tree} reached ${ceremony.mastery}.`
+        : ceremony.isPersonalBest
+          ? `${game.tree} remembers a new best.`
         : `${formatNumber(ceremony.added)} points took root.`;
       ui.growthCopy.textContent = ceremony.newLevel > ceremony.oldLevel
         ? 'Its cumulative score opened a permanent growth stage. Every completed run continues feeding this tree.'
-        : `This run joined the tree’s lifetime total. ${game.tree} is closer to its next permanent form.`;
+        : ceremony.nearBest
+          ? `This run joined the lifetime total and came within ${formatNumber(ceremony.gap)} of your ${ceremony.lane} best.`
+          : `This run joined the tree’s lifetime total. ${game.tree} is closer to its next permanent form.`;
       ui.growthRunLabel.textContent = 'RUN SCORE';
       ui.growthRunScore.textContent = formatNumber(ceremony.added);
       ui.growthScoreLabel.textContent = 'TREE TOTAL';
-      ui.growthScore.textContent = formatNumber(ceremony.totalScore);
+      ui.growthScore.textContent = formatNumber(ceremony.previousTotal);
       ui.growthMasteryLabel.textContent = 'GROWTH';
       ui.growthMastery.textContent = ceremony.mastery;
+      ui.growthNextReward.textContent = [ceremony.nextReward?.growthLabel, ceremony.nextReward?.skillLabel].filter(Boolean).join(' · ') || 'KEEP GROWING';
       return;
     }
 
@@ -741,6 +1050,7 @@
       ui.growthScore.textContent = formatNumber(ceremony.threshold);
       ui.growthMasteryLabel.textContent = 'SEEDS HELD';
       ui.growthMastery.textContent = `${seedCount} / 3`;
+      ui.growthNextReward.textContent = [gameReward?.growthLabel, gameReward?.skillLabel].filter(Boolean).join(' · ') || 'KEEP GROWING';
       return;
     }
 
@@ -754,6 +1064,28 @@
       ui.growthScore.textContent = 'TREE 04';
       ui.growthMasteryLabel.textContent = 'STATUS';
       ui.growthMastery.textContent = 'AWAKE';
+      const prismReward = progression.nextRewardFor(profile, 'prismbind');
+      ui.growthNextReward.textContent = [prismReward?.growthLabel, prismReward?.skillLabel].filter(Boolean).join(' · ') || 'FACE THE GUARDIAN';
+      return;
+    }
+
+    if (ceremony.type === 'session-harmony') {
+      ui.growthPanel.style.setProperty('--ceremony-color', '#ffd773');
+      ui.growthSymbol.style.color = '#ffd773';
+      ui.growthSymbol.textContent = '✤';
+      ui.ceremonyKicker.textContent = 'GROVE HARMONY';
+      ui.growthTitle.textContent = 'Three tree voices answer.';
+      ui.growthCopy.textContent = 'Lumen, pattern, and ripple were all awakened in one visit. The Grove remembers the breadth of your practice until this page rests.';
+      ui.growthOutcome.classList.remove('is-hidden');
+      ui.growthOutcome.textContent = 'THREE FOUNDATIONAL TREES · ONE VISIT';
+      ui.growthRunLabel.textContent = 'TREES PLAYED';
+      ui.growthRunScore.textContent = '3 / 3';
+      ui.growthScoreLabel.textContent = 'THIS VISIT';
+      ui.growthScore.textContent = 'AWAKENED';
+      ui.growthMasteryLabel.textContent = 'GROVE STATE';
+      ui.growthMastery.textContent = 'HARMONY';
+      ui.growthNextReward.textContent = 'RETURN TO ANY TREE · REACH FOR ANOTHER PERSONAL BEST';
+      ui.growthContinueButton.querySelector('span').textContent = 'HEAR THE GROVE';
       return;
     }
 
@@ -766,6 +1098,7 @@
     ui.growthScore.textContent = 'SECOND GROVE';
     ui.growthMasteryLabel.textContent = 'PATH';
     ui.growthMastery.textContent = 'REVEALED';
+    ui.growthNextReward.textContent = 'TREES 05–07 ARE NOW VISIBLE BEYOND THE CROWNHEART';
   }
 
   function showNextCeremony() {
@@ -773,12 +1106,18 @@
     currentCeremony = ceremonyQueue.shift();
     configureCeremony(currentCeremony);
     setOverlay(ui.growthOverlay, true);
+    if (currentCeremony.type === 'run-growth') {
+      startScorePresentation(currentCeremony);
+      const outcome = ui.growthOutcome.textContent ? ` ${ui.growthOutcome.textContent}.` : '';
+      announce(`${GAMES[currentCeremony.gameId].title} run score ${formatNumber(currentCeremony.added)}. Updated tree total ${formatNumber(currentCeremony.totalScore)}.${outcome}`);
+    } else announce(`${ui.ceremonyKicker.textContent}. ${ui.growthTitle.textContent}`);
     window.setTimeout(() => ui.growthContinueButton.focus(), 80);
   }
 
   function completeCurrentCeremony() {
     const ceremony = currentCeremony;
     if (!ceremony) return;
+    clearScorePresentation(ceremony.type === 'run-growth' ? ceremony.totalScore : undefined);
     if (ceremony.ceremonyKey) {
       const acknowledged = progression.acknowledgeCeremony(profile, ceremony.ceremonyKey);
       if (acknowledged.ok) {
@@ -791,12 +1130,23 @@
     updateProfileUI();
     buildSaplings();
     rendererState.growthPulse = reducedMotion ? 0 : .8;
+    const returnGame = ceremony.sourceGameId || ceremony.gameId || 'lumenloom';
+    if (ceremony.type === 'session-harmony') {
+      rendererState.growthPulseColor = '#ffd773';
+      ui.firstTree?.classList.remove('is-harmony-received');
+      if (!reducedMotion) requestAnimationFrame(() => ui.firstTree?.classList.add('is-harmony-received'));
+      window.setTimeout(() => ui.firstTree?.classList.remove('is-harmony-received'), 1000);
+      playGroveHarmony();
+      showToast('Grove Harmony awakened — three tree voices, one visit.', 3);
+    } else if (GAMES[returnGame]) {
+      rendererState.growthPulseColor = GAMES[returnGame].color;
+      highlightReturnedTree(returnGame);
+      playTreeVoice(returnGame, 'growth');
+    }
     if (ceremonyQueue.length) window.setTimeout(showNextCeremony, 100);
     else {
-      const returnGame = ceremony.gameId || 'prismbind';
       window.setTimeout(() => {
-        if (!ui.trialButton.disabled && FOUNDATIONAL_GAME_IDS.includes(returnGame)) ui.trialButton.focus();
-        else document.querySelector(`[data-play="${returnGame}"]`)?.focus();
+        document.querySelector(`[data-play="${returnGame}"]`)?.focus();
       }, 100);
     }
   }
@@ -877,6 +1227,8 @@
     saveProfile({ timestamp: false });
     ceremonyQueue = [];
     currentCeremony = null;
+    resetVisitState();
+    clearScorePresentation();
     resetArmed = false;
     resetTimer = 0;
     ui.resetProgressButton.textContent = 'Reset all local progress';
@@ -972,6 +1324,8 @@
       catch (_) { /* The core profile may still have imported successfully. */ }
       ceremonyQueue = [];
       currentCeremony = null;
+      resetVisitState();
+      clearScorePresentation();
       enqueuePersistentRewards();
       updateProfileUI();
       buildSaplings();
@@ -1548,6 +1902,53 @@
     rendererMetrics.lastQaPublishAt = 0;
   }
 
+  function satisfactionSnapshot() {
+    const rewards = {};
+    for (const gameId of GAME_IDS) rewards[gameId] = progression.nextRewardFor(profile, gameId);
+    return Object.freeze({
+      playedThisVisit: Object.freeze([...visitState.played]),
+      improvedThisVisit: Object.freeze([...visitState.improved]),
+      harmonyQueued: visitState.harmonyQueued,
+      soundEnabled: groveSoundEnabled,
+      activeAudioNodes: activeAudioNodes.size,
+      maxActiveAudioNodes: audioQa.maxActiveNodes,
+      lastAudioCue: audioQa.lastCue,
+      activeCeremony: currentCeremony?.type || null,
+      scoreMoteCount: ui.scoreStream?.childElementCount || 0,
+      scoreCountActive: Boolean(scoreCounterFrame),
+      scoreCountDurationMs: SCORE_COUNT_DURATION_MS,
+      scoreCountMaxWrites: SCORE_COUNT_MAX_WRITES,
+      moteCaps: Object.freeze({ desktop: SCORE_MOTE_CAP_DESKTOP, mobile: SCORE_MOTE_CAP_MOBILE, reducedMotion: 0 }),
+      rewards: Object.freeze(rewards)
+    });
+  }
+
+  function previewRunFeedbackForQa(gameId, score, assisted = false, victory = false) {
+    if (!GAME_IDS.includes(gameId)) return null;
+    return progression.classifyRunFeedback(profile.games[gameId], {
+      gameId,
+      score: safeInteger(score),
+      assisted: Boolean(assisted),
+      victory: Boolean(victory)
+    });
+  }
+
+  function setVisitStateForQa(played = [], improved = []) {
+    resetVisitState();
+    for (const gameId of played) if (GAME_IDS.includes(gameId)) visitState.played.add(gameId);
+    for (const gameId of improved) if (visitState.played.has(gameId)) visitState.improved.add(gameId);
+    visitState.harmonyQueued = FOUNDATIONAL_GAME_IDS.every((gameId) => visitState.played.has(gameId));
+    updateVisitUI();
+    return satisfactionSnapshot();
+  }
+
+  function finishSatisfactionEffectsForQa() {
+    clearScorePresentation(currentCeremony?.type === 'run-growth' ? currentCeremony.totalScore : undefined);
+    document.querySelectorAll('.is-selecting, .is-score-received, .is-harmony-received')
+      .forEach((element) => element.classList.remove('is-selecting', 'is-score-received', 'is-harmony-received'));
+    return satisfactionSnapshot();
+  }
+
   function publishRendererQa(now, state) {
     if (!qaHostAllowed) return;
     if (state === rendererMetrics.lastQaState && now - rendererMetrics.lastQaPublishAt < 500) return;
@@ -1616,7 +2017,29 @@
   }
 
   document.querySelectorAll('[data-play]').forEach((button) => {
-    button.addEventListener('click', () => {
+    const card = button.closest('.game-card');
+    const releaseSelection = () => {
+      clearTimeout(selectionReleaseTimer);
+      selectionReleaseTimer = window.setTimeout(() => card?.classList.remove('is-selecting'), 90);
+    };
+    button.addEventListener('pointerdown', (event) => {
+      if (button.disabled) return;
+      clearTimeout(selectionReleaseTimer);
+      card?.classList.add('is-selecting');
+      playTreeVoice(button.dataset.play, 'select');
+      if (!reducedMotion && event.pointerType === 'touch' && typeof navigator.vibrate === 'function') {
+        try { navigator.vibrate(8); } catch (_) { /* Haptics are optional. */ }
+      }
+    }, { passive: true });
+    button.addEventListener('pointerup', releaseSelection, { passive: true });
+    button.addEventListener('pointercancel', releaseSelection, { passive: true });
+    button.addEventListener('pointerleave', releaseSelection, { passive: true });
+    button.addEventListener('click', (event) => {
+      if (event.detail === 0) {
+        card?.classList.add('is-selecting');
+        releaseSelection();
+        playTreeVoice(button.dataset.play, 'select');
+      }
       trialSession = null;
       openGame(button.dataset.play);
     });
@@ -1677,6 +2100,7 @@
     ui.resetProgressButton.textContent = 'Reset all local progress';
     setTimeout(() => ui.settingsButton.focus(), 100);
   });
+  ui.groveSoundButton.addEventListener('click', toggleGroveSound);
   ui.resetProgressButton.addEventListener('click', resetProgress);
   ui.exportProgressButton.addEventListener('click', exportProgress);
   ui.importProgressButton.addEventListener('click', () => ui.importProgressInput.click());
@@ -1700,14 +2124,19 @@
   window.addEventListener('scroll', () => quietRendererFor(180), { passive: true });
   ui.groveScreen.addEventListener('pointerdown', () => quietRendererFor(140), { passive: true, capture: true });
   document.addEventListener('visibilitychange', () => restartRenderer(!document.hidden));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopActiveAudioNodes();
+  });
   motionQuery?.addEventListener?.('change', (event) => {
     reducedMotion = event.matches;
     rendererState.growthPulse = reducedMotion ? 0 : rendererState.growthPulse;
+    if (reducedMotion && currentCeremony?.type === 'run-growth') clearScorePresentation(currentCeremony.totalScore);
     restartRenderer(true);
   });
   saveProfile({ timestamp: false });
   enqueuePersistentRewards();
   buildSaplings();
+  updateGroveSoundUI();
   updateProfileUI();
   resizeCanvas();
   if (profile.introSeen) {
@@ -1722,7 +2151,12 @@
   if (qaHostAllowed) {
     window.__MASTERY_GROVE_QA__ = Object.freeze({
       getRendererSnapshot: rendererSnapshot,
-      resetRendererMetrics
+      resetRendererMetrics,
+      getSatisfactionSnapshot: satisfactionSnapshot,
+      previewRunFeedback: previewRunFeedbackForQa,
+      setVisitState: setVisitStateForQa,
+      finishSatisfactionEffects: finishSatisfactionEffectsForQa,
+      treeVoices: TREE_VOICES
     });
   }
   scheduleRenderer();
