@@ -1,11 +1,13 @@
-# Privacy notice — review draft
+# Privacy notice — owner-review draft
 
-> **PUBLICATION GATE:** Owner and qualified legal/privacy review are required. Replace every `TBD` before publishing this notice or submitting the game to a store or portal.
+> **PUBLICATION GATE:** Owner and qualified legal/privacy review are required before this draft is treated as the final policy or used for a store or portal submission.
 
-- Last reviewed: TBD
-- Effective date: TBD
-- Publisher/legal entity: TBD
-- Privacy contact: TBD
+- Runtime behavior last reviewed: 2026-07-13
+- Effective date: Pending owner approval
+- Studio name: First Bloom Games
+- Publisher/legal entity and final rights holder: Pending owner approval
+- Final privacy contact: Pending owner approval
+- Pre-release technical feedback: https://github.com/FirstBloomGames/Mastery-Grove/issues
 
 ## Current release behavior
 
@@ -19,4 +21,6 @@ The website host, game portal, app store, mobile wrapper, advertising provider, 
 
 ## Player requests and retention
 
-TBD: identify the publisher, applicable jurisdictions, contact method, retention policy, children's privacy position, and process for access/deletion requests. Local-only data can presently be removed through the Grove reset or browser/site-data controls.
+The final publisher identity, applicable jurisdictions, formal privacy contact, retention statement, children's-privacy position, and request process remain pending owner and qualified review. Local-only gameplay data can presently be removed through the Grove reset or browser/site-data controls. An exported backup remains wherever the player chooses to save it until the player deletes it.
+
+The public issue tracker is suitable for pre-release technical feedback only. Players should not post personal, confidential, exported-save, or other sensitive information there.

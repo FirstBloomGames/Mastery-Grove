@@ -1,0 +1,122 @@
+name: Public build bug
+description: Report a reproducible problem in the published Mastery Grove web build.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping test Mastery Grove. Do not attach an exported Grove profile, credentials, personal information, or an unredacted recording containing notifications/account details.
+
+  - type: input
+    id: version
+    attributes:
+      label: Build version
+      description: Copy the version shown by the build or its version.json file.
+      placeholder: 0.4.0-rc.7
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Exact page URL
+      placeholder: https://firstbloomgames.github.io/Mastery-Grove/
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Game or area
+      options:
+        - Mastery Grove
+        - Lumenloom
+        - Bloomfold
+        - Ripplewake
+        - Prismbind
+        - Threefold Trial
+        - Save, import, or reset
+        - Deployment or loading
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Player impact
+      description: Choose the closest outcome; maintainers assign final severity.
+      options:
+        - Crash, lost/duplicated progress, privacy exposure, or cannot continue
+        - Core control, navigation, gate, readability, or severe performance failure
+        - Noticeable problem with a safe workaround
+        - Cosmetic or low-impact polish
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Device, operating system, and browser version
+      placeholder: iPhone 15, iOS 19.1, Safari
+    validations:
+      required: true
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Profile state
+      options:
+        - Fresh Private or Incognito profile
+        - Existing local profile
+        - Imported backup
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: frequency
+    attributes:
+      label: Reproduction rate
+      placeholder: 3 of 3 attempts
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Start from the public URL and include orientation, background/resume, audio, and Return actions when relevant.
+      placeholder: |
+        1. Open the public URL in portrait.
+        2. Choose Ripplewake.
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence or additional context
+      description: Never paste profile JSON. Confirm screenshots and logs contain no personal information.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I did not attach a save export, credentials, personal information, or unredacted private content.
+          required: true

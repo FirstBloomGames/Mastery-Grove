@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070817">
   <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
+  <meta name="first-bloom-release" content="0.4.0-rc.7">
   <title>First Bloom: The Mastery Grove</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.6">
-  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
-  <link rel="manifest" href="../manifest.webmanifest">
-  <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.6">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.7">
 </head>
 <body>
   <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
@@ -184,6 +181,7 @@
 
       <footer class="grove-footer">
         <span>EVERY FINISHED RUN FEEDS ITS OWN TREE · PERSONAL BESTS STAY VISIBLE</span>
+        <button id="releaseInfoButton" class="release-info-button" type="button">Release information &amp; support</button>
         <span id="profileStatus">LOCAL KEEPER PROFILE · READY</span>
       </footer>
     </section>
@@ -262,6 +260,53 @@
       </div>
     </section>
 
+    <section id="releaseInfoOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="releaseInfoTitle" aria-describedby="releaseInfoSummary" aria-hidden="true" inert>
+      <div class="release-info-panel ornate-panel">
+        <span class="eyebrow">RELEASE INFORMATION &amp; SUPPORT</span>
+        <h2 id="releaseInfoTitle" tabindex="-1">A clear window into the Grove.</h2>
+        <p id="releaseInfoSummary">Build details, privacy facts, review status, and a safe way to share technical context.</p>
+
+        <div class="release-info-grid">
+          <section class="release-info-card release-build-card" aria-labelledby="releaseBuildHeading">
+            <span id="releaseBuildHeading" class="release-info-label">CURRENT BUILD</span>
+            <strong id="releaseBuildIdentity">0.4.0-rc.7</strong>
+            <small>Release candidate · web build</small>
+          </section>
+
+          <section class="release-info-card release-privacy-card" aria-labelledby="releasePrivacyHeading">
+            <span id="releasePrivacyHeading" class="release-info-label">LOCAL-ONLY PLAY</span>
+            <p>First Bloom has no accounts, ads, analytics, or trackers. Scores and preferences stay in this browser; the game makes no automatic transmission of them.</p>
+          </section>
+
+          <section class="release-info-card release-review-card" aria-labelledby="releaseReviewHeading">
+            <div class="release-card-heading">
+              <span id="releaseReviewHeading" class="release-info-label">CREDITS &amp; LEGAL</span>
+              <strong class="review-pending">OWNER REVIEW PENDING</strong>
+            </div>
+            <p>The privacy and credits drafts are available for review. Ownership, rights, and legal wording still require owner approval before final release.</p>
+            <div class="release-link-row">
+              <a href="../PRIVACY.md" target="_blank" rel="noopener">Read privacy draft</a>
+              <a href="../CREDITS.md" target="_blank" rel="noopener">Read credits draft</a>
+            </div>
+          </section>
+
+          <section class="release-info-card release-support-card" aria-labelledby="releaseSupportHeading">
+            <span id="releaseSupportHeading" class="release-info-label">FEEDBACK &amp; DIAGNOSTICS</span>
+            <p>If something feels wrong, copy the non-sensitive device details below and include them with a GitHub issue. Diagnostics never include scores, saves, or stored profile contents.</p>
+            <div class="release-support-actions">
+              <button id="copyDiagnosticsButton" class="release-action-button" type="button">Copy diagnostics</button>
+              <a class="release-action-link" href="https://github.com/FirstBloomGames/Mastery-Grove/issues/new/choose" target="_blank" rel="noopener noreferrer">Open feedback form</a>
+            </div>
+            <p id="diagnosticsStatus" class="diagnostics-status" role="status" aria-live="polite">Diagnostics are created only when you choose Copy diagnostics.</p>
+            <label id="diagnosticsOutputLabel" class="visually-hidden" for="diagnosticsOutput">Selectable Grove diagnostics</label>
+            <textarea id="diagnosticsOutput" class="diagnostics-output is-hidden" rows="8" readonly spellcheck="false" tabindex="0" aria-labelledby="diagnosticsOutputLabel"></textarea>
+          </section>
+        </div>
+
+        <button id="closeReleaseInfoButton" class="primary-button release-close-button" type="button"><span>CLOSE RELEASE INFORMATION</span><i aria-hidden="true">→</i></button>
+      </div>
+    </section>
+
     <section id="returnConfirmOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="returnConfirmTitle" aria-describedby="returnConfirmCopy" aria-hidden="true" inert>
       <div class="settings-panel ornate-panel compact-panel">
         <span class="eyebrow">UNFINISHED RUN</span>
@@ -304,7 +349,7 @@
 
   <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
 
-  <script src="progression.js?v=0.4.0-rc.6"></script>
-  <script src="grove.js?v=0.4.0-rc.6"></script>
+  <script src="progression.js?v=0.4.0-rc.7"></script>
+  <script src="grove.js?v=0.4.0-rc.7"></script>
 </body>
 </html>

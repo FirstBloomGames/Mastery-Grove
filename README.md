@@ -1,6 +1,6 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.6**
+Current build: **0.4.0-rc.7**
 
 This candidate makes the Mastery Grove itself answer the player without restoring continuous visual cost. Every tree now responds immediately to selection, exposes its next growth and skill reward, remembers completed trees for the current visit, and receives accepted scores through a save-first return ceremony with an exact total count-up. Strict personal bests, matched bests, and runs within 90% of the prior lane best receive honest outcome language. Completing all three foundational games in one visit awakens one decorative Grove Harmony. Four short locally synthesized tree voices are optional through a dedicated Grove sound control; reduced motion resolves the same information without score travel or motes. All new effects are discrete, capped, dependency-free, and return to rest.
 
@@ -11,6 +11,8 @@ This hotfix addresses real-phone lag in the Mastery Grove selection screen. Mobi
 This candidate completes Lumenloom's portrait-mobile release pass and Garden Awakening spectacle. It adds relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding from Mastery Grove. The garden now carries five distinct night atmospheres, shape-backed target guidance, layered luminous thread and knots, persistent capped awakening marks, closure bloom waves, a responsive Hollow Guardian, and staged dawn. Mastery Grove also quiets its game bar during active play while preserving a clear 44px return control. Desktop and mobile share the same gameplay rules, scoring, progression, results, saves, and Grove protocol.
 
 This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, and Prismbind. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
+
+This D-025 candidate adds release-validation and public-trust infrastructure without changing gameplay or progression. The Grove exposes factual build, local-data, review-status, feedback, and user-initiated diagnostic information. Manual device and uncoached validation materials live under `release-validation/` and are intentionally excluded from the public payload. No analytics, automatic telemetry, ad SDK, account, or remote save service is introduced.
 
 ## Build and verify
 
@@ -44,3 +46,7 @@ This is a release candidate, not a legal or store-submission approval. Before pu
 - Perform an uncoached full-progression playtest from a clean profile on desktop and physical iPhone/Android hardware.
 - Validate the exact `dist` upload on the chosen portal, host, or mobile wrapper.
 - Produce platform-specific PNG icons, screenshots, signing credentials, and store metadata where required.
+
+## D-025 controlled web-beta evidence
+
+Use `release-validation/README.md` as the ordered owner/tester gate. A candidate is not promoted merely because automated checks pass: the exact public URL still needs clean-profile physical-device, uncoached comprehension/replay, save/recovery, and owner privacy/credits evidence. Only repeatable release blockers should expand the pre-beta code scope.
