@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "First Bloom: The Mastery Grove",
-  "version": "0.4.0-rc.6",
+  "version": "0.4.0-rc.7",
   "channel": "release-candidate",
   "entrypoint": "index.html",
   "canonicalEntry": "MasteryGrove/index.html",
@@ -17,7 +17,7 @@
     "target-platform-technical-review",
     "uncoached-release-candidate-playtest"
   ],
-  "builtAt": "2026-07-13T23:55:28.670Z",
+  "builtAt": "2026-07-14T02:16:19.229Z",
   "fileCount": 28,
   "hashedPayloadFileCount": 27,
   "files": [
@@ -29,7 +29,7 @@
     {
       "path": "Bloomfold/index.html",
       "bytes": 7878,
-      "sha256": "f72988cf348d8a02b50e8a30656727f8532d68d770c0961b1166d89817a0c6e0"
+      "sha256": "fd46bc7e2d239187e795823428cdaa69140b4c91f7308e46891d623702c1dcf1"
     },
     {
       "path": "Bloomfold/styles.css",
@@ -38,13 +38,13 @@
     },
     {
       "path": "CREDITS.md",
-      "bytes": 1223,
-      "sha256": "772766b2e7b4b7595e57c156f7b15b37b53885bf43b538a202edcbf4eba894fd"
+      "bytes": 1672,
+      "sha256": "537766e08672c63914701a0bd3e2d4d5121d6c71e1be661e1177b06d12eef359"
     },
     {
       "path": "index.html",
       "bytes": 894,
-      "sha256": "20621100a2f6fbd01861b26964e282c0f79aff10bacba1bf6b0c33621fa99711"
+      "sha256": "14cdb11c8022ce50fec13a822fe747e3e979b44b0895c99fd201b21d708f8b23"
     },
     {
       "path": "Lumenloom/game.js",
@@ -54,7 +54,7 @@
     {
       "path": "Lumenloom/index.html",
       "bytes": 9963,
-      "sha256": "e7d15441b2f25e842286475ad80c6fc88ca6a0afc211e46d9f1c7c831fafd46e"
+      "sha256": "c6d3ad64008ca41b311efc40fbe3080c7c589cce4dc5d4840faed29ed9c8bf5c"
     },
     {
       "path": "Lumenloom/styles.css",
@@ -68,13 +68,13 @@
     },
     {
       "path": "MasteryGrove/grove.js",
-      "bytes": 91160,
-      "sha256": "73cd6350bc4d7de0752b5ac693dfca529ba01ead9e2cfa59d46c7b487019d65f"
+      "bytes": 95105,
+      "sha256": "8ac22910b026dd7bab0e3184eb00eaed948da50076195a46afeb7bbf7f017c49"
     },
     {
       "path": "MasteryGrove/index.html",
-      "bytes": 19649,
-      "sha256": "a02c663151f7b7c0a79cf186d404ad6a12d7c0dfe2b5c6aa8d4eb07efbd5d167"
+      "bytes": 23147,
+      "sha256": "0e1e1c062f2959ebf04d4763eea3fa448f4d96694df0897368cbd8208259b0fe"
     },
     {
       "path": "MasteryGrove/progression.js",
@@ -83,8 +83,8 @@
     },
     {
       "path": "MasteryGrove/styles.css",
-      "bytes": 45540,
-      "sha256": "823ca1ef171e229d027588677923446aa7ecd4b00cc254feb3e709f742e5c4d0"
+      "bytes": 50163,
+      "sha256": "56c1fd735bae23ce776c9638780c5e5b3b94c4c5c3ff43e3f18d42a55afa65b0"
     },
     {
       "path": "Prismbind/game.js",
@@ -99,7 +99,7 @@
     {
       "path": "Prismbind/index.html",
       "bytes": 8794,
-      "sha256": "a4fa967a427b4d5e4556f7672a0abe3b6ef76cbad349a3f9253a50bfda0cbb69"
+      "sha256": "cce7ded7939c28bdcf002c7438da016dbd464f877d02afe8819c0c8e4c4efdba"
     },
     {
       "path": "Prismbind/rules.js",
@@ -118,13 +118,13 @@
     },
     {
       "path": "PRIVACY.md",
-      "bytes": 1680,
-      "sha256": "dcac2b44b63c7b275e35ea35d72d36d855adf3b658b1d0a75b2292784bd1a785"
+      "bytes": 2232,
+      "sha256": "eec98eee4d3d85ca5c99e96cb659123b200f2393dd99a21756326f7f4d424ade"
     },
     {
       "path": "README.md",
-      "bytes": 4310,
-      "sha256": "e8f7638a1cfab734be0d43801a1fd76c1625c5e580393f7d27462e358ef9ad63"
+      "bytes": 5165,
+      "sha256": "0315a919ee8e2bc71f202799177ab9d97fac503d5c8c519bd90eb6ff4b9537da"
     },
     {
       "path": "release-assets/favicon.svg",
@@ -139,7 +139,7 @@
     {
       "path": "Ripplewake/index.html",
       "bytes": 7312,
-      "sha256": "86daabcae36749b61a329fa8df7ffc97ea077d4f15be94bdc573f587a2c3992d"
+      "sha256": "97a08ca228ff649924d7466a4b50679b26cc9c3178d61695cc0852b94257f4f2"
     },
     {
       "path": "Ripplewake/rules.js",
@@ -154,7 +154,7 @@
     {
       "path": "version.json",
       "bytes": 480,
-      "sha256": "22a8ded8d928550531437bc9651cf9c29c5a2d5f469f02a60348a7ec7852d1dc"
+      "sha256": "8ee978a138ac265ed5d6369804c8af395598b07ff5cc0e899ca9cacc79876e4d"
     }
   ]
 }

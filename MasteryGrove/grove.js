@@ -16,6 +16,7 @@
   const SCORE_COUNT_MAX_WRITES = 20;
   const SCORE_MOTE_CAP_DESKTOP = 10;
   const SCORE_MOTE_CAP_MOBILE = 6;
+  const RELEASE_VERSION = document.querySelector('meta[name="first-bloom-release"]')?.content?.trim() || 'unavailable';
 
   const TREE_VOICES = Object.freeze({
     lumenloom: Object.freeze({ select: Object.freeze([392, 587.33]), growth: Object.freeze([587.33, 783.99]), wave: 'sine' }),
@@ -167,6 +168,14 @@
     importProgressButton: $('importProgressButton'),
     importProgressInput: $('importProgressInput'),
     dataManagementStatus: $('dataManagementStatus'),
+    releaseInfoButton: $('releaseInfoButton'),
+    releaseInfoOverlay: $('releaseInfoOverlay'),
+    releaseInfoTitle: $('releaseInfoTitle'),
+    releaseBuildIdentity: $('releaseBuildIdentity'),
+    copyDiagnosticsButton: $('copyDiagnosticsButton'),
+    diagnosticsStatus: $('diagnosticsStatus'),
+    diagnosticsOutput: $('diagnosticsOutput'),
+    closeReleaseInfoButton: $('closeReleaseInfoButton'),
     returnConfirmOverlay: $('returnConfirmOverlay'),
     stayInGameButton: $('stayInGameButton'),
     confirmReturnButton: $('confirmReturnButton'),
@@ -1344,6 +1353,73 @@
     window.setTimeout(() => { ui.groveLive.textContent = message; }, 20);
   }
 
+  function buildReleaseDiagnostics() {
+    const orientation = window.screen?.orientation?.type
+      || (window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait');
+    const storageState = !storageAvailable
+      ? 'unavailable'
+      : storageReadOnly
+        ? 'available (read-only protection active)'
+        : 'available';
+    const rendererTier = canvas.dataset.rendererProfile || (view.mobileRenderer ? 'mobile-balanced' : 'desktop-balanced');
+    const devicePixelRatio = Number(window.devicePixelRatio || 1);
+    const userAgent = String(navigator.userAgent || 'unavailable').replace(/[\r\n]+/g, ' ').trim().slice(0, 320);
+
+    return [
+      'First Bloom: The Mastery Grove diagnostics',
+      `Build: ${RELEASE_VERSION}`,
+      `Viewport: ${Math.round(window.innerWidth)} x ${Math.round(window.innerHeight)} CSS px`,
+      `Device pixel ratio: ${Number.isFinite(devicePixelRatio) ? devicePixelRatio.toFixed(2) : 'unavailable'}`,
+      `Orientation: ${orientation}`,
+      `Reduced motion: ${reducedMotion ? 'yes' : 'no'}`,
+      `Renderer tier: ${rendererTier}`,
+      `Storage availability: ${storageState}`,
+      `User agent: ${userAgent}`
+    ].join('\n');
+  }
+
+  function resetDiagnosticsOutput() {
+    ui.diagnosticsOutput.value = '';
+    ui.diagnosticsOutput.classList.add('is-hidden');
+    ui.diagnosticsStatus.textContent = 'Diagnostics are created only when you choose Copy diagnostics.';
+  }
+
+  async function copyReleaseDiagnostics() {
+    const diagnostics = buildReleaseDiagnostics();
+    ui.diagnosticsOutput.value = diagnostics;
+    ui.diagnosticsOutput.classList.remove('is-hidden');
+
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
+      await navigator.clipboard.writeText(diagnostics);
+      ui.diagnosticsStatus.textContent = 'Diagnostics copied. Paste them into a GitHub issue when useful.';
+      announce('Safe release diagnostics copied.');
+    } catch (_) {
+      ui.diagnosticsOutput.focus({ preventScroll: true });
+      ui.diagnosticsOutput.select();
+      ui.diagnosticsOutput.setSelectionRange(0, diagnostics.length);
+      ui.diagnosticsStatus.textContent = 'Automatic copy is unavailable. The diagnostics are selected; use your device copy command.';
+      announce('Diagnostics selected for manual copying.');
+    }
+  }
+
+  function openReleaseInformation() {
+    ui.releaseBuildIdentity.textContent = RELEASE_VERSION;
+    resetDiagnosticsOutput();
+    setOverlay(ui.releaseInfoOverlay, true);
+    const releasePanel = ui.releaseInfoOverlay.querySelector('.release-info-panel');
+    window.setTimeout(() => {
+      if (releasePanel) releasePanel.scrollTop = 0;
+      ui.releaseInfoTitle.focus({ preventScroll: true });
+    }, 80);
+  }
+
+  function closeReleaseInformation() {
+    setOverlay(ui.releaseInfoOverlay, false);
+    resetDiagnosticsOutput();
+    window.setTimeout(() => ui.releaseInfoButton.focus({ preventScroll: true }), 100);
+  }
+
   function showToast(message, duration = 2.3) {
     ui.groveToast.textContent = message;
     ui.groveToast.classList.add('is-visible');
@@ -1351,7 +1427,7 @@
   }
 
   function syncModalState() {
-    const overlays = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.returnConfirmOverlay];
+    const overlays = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay];
     const modalOpen = overlays.some((overlay) => overlay.classList.contains('is-visible'));
     const gameOpen = !ui.gameShell.classList.contains('is-hidden');
     ui.groveScreen.inert = modalOpen || gameOpen;
@@ -1371,7 +1447,7 @@
 
   function trapModalFocus(event) {
     if (event.key !== 'Tab') return false;
-    const overlay = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.returnConfirmOverlay]
+    const overlay = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay]
       .find((candidate) => candidate.classList.contains('is-visible'));
     if (!overlay) return false;
     const focusable = [...overlay.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
@@ -1379,12 +1455,13 @@
     if (!focusable.length) return false;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+    const activeIndex = focusable.indexOf(document.activeElement);
+    if (event.shiftKey && (activeIndex <= 0 || !overlay.contains(document.activeElement))) {
       event.preventDefault();
       last.focus();
       return true;
     }
-    if (!event.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) {
+    if (!event.shiftKey && (activeIndex < 0 || document.activeElement === last || !overlay.contains(document.activeElement))) {
       event.preventDefault();
       first.focus();
       return true;
@@ -2105,6 +2182,9 @@
   ui.exportProgressButton.addEventListener('click', exportProgress);
   ui.importProgressButton.addEventListener('click', () => ui.importProgressInput.click());
   ui.importProgressInput.addEventListener('change', () => importProgressFile(ui.importProgressInput.files?.[0]));
+  ui.releaseInfoButton.addEventListener('click', openReleaseInformation);
+  ui.copyDiagnosticsButton.addEventListener('click', copyReleaseDiagnostics);
+  ui.closeReleaseInfoButton.addEventListener('click', closeReleaseInformation);
 
   window.addEventListener('message', (event) => {
     const transitioned = validateMessage(event);
@@ -2113,7 +2193,9 @@
 
   window.addEventListener('keydown', (event) => {
     if (trapModalFocus(event)) return;
-    if (event.key === 'Escape' && ui.settingsOverlay.classList.contains('is-visible')) {
+    if (event.key === 'Escape' && ui.releaseInfoOverlay.classList.contains('is-visible')) {
+      closeReleaseInformation();
+    } else if (event.key === 'Escape' && ui.settingsOverlay.classList.contains('is-visible')) {
       ui.closeSettingsButton.click();
     } else if (event.key === 'Escape' && ui.returnConfirmOverlay.classList.contains('is-visible')) {
       ui.stayInGameButton.click();

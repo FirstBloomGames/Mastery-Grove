@@ -1,0 +1,97 @@
+name: Uncoached playtest finding
+description: Record an anonymized observation from an uncoached release-candidate session.
+title: "[Playtest] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Record observable behavior, not participant identity. Do not attach save exports or collect analytics, account information, email addresses, or advertising identifiers.
+
+  - type: input
+    id: version
+    attributes:
+      label: Build version and anonymous session ID
+      placeholder: 0.4.0-rc.7 / PT-07
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Device, operating system, and browser
+      placeholder: Pixel 9, Android 17, Chrome
+    validations:
+      required: true
+
+  - type: dropdown
+    id: familiarity
+    attributes:
+      label: Prior familiarity
+      options:
+        - New to Mastery Grove
+        - Played an earlier build
+        - Regular tester
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: protocol
+    attributes:
+      label: Protocol confirmation
+      options:
+        - label: The exact public candidate URL was used.
+          required: true
+        - label: No control or progression coaching occurred before this observation.
+          required: true
+        - label: The session record is anonymous and contains no profile export or personal data.
+          required: true
+
+  - type: input
+    id: timing
+    attributes:
+      label: Time to first game / total session duration
+      placeholder: 00:42 / 14:30
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: First-run outcome
+      options:
+        - Completed and returned without rescue
+        - Completed but needed rescue to return
+        - Entered but did not complete
+        - Could not enter a game
+    validations:
+      required: true
+
+  - type: dropdown
+    id: continuation
+    attributes:
+      label: Voluntary continuation
+      options:
+        - Began a different game
+        - Replayed the same game
+        - Continued exploring the Grove
+        - Stopped after the first run
+
+  - type: textarea
+    id: observation
+    attributes:
+      label: Exact observable finding
+      description: Include what the player did, what the build displayed, and any brief exact wording that matters.
+    validations:
+      required: true
+
+  - type: textarea
+    id: comprehension
+    attributes:
+      label: Reward and gate comprehension
+      description: Record whether the player could explain Tree Total vs Best Run, the next reward, and Prismbind's three-Seed gate.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Player impact and reproduction
+      description: Note confusion duration, rescue, lost navigation/score, frequency, and whether another tester reproduced it.
+    validations:
+      required: true
