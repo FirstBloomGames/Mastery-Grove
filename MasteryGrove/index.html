@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070817">
   <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
-  <meta name="first-bloom-release" content="0.4.0-rc.7">
+  <meta name="first-bloom-release" content="0.4.0-rc.8">
   <title>First Bloom: The Mastery Grove</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.7">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.8">
 </head>
 <body>
   <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
@@ -164,18 +164,49 @@
           <button id="prismbindButton" class="enter-button" type="button" data-play="prismbind" disabled><span id="prismbindButtonLabel">EARN 3 MASTERY SEEDS</span><i aria-hidden="true">◆</i></button>
           <small id="prismbindRequirement">0 / 3 SEEDS · PEAK SKILL, NOT TREE TOTAL</small>
         </article>
+
+        <article id="mothchorusCard" class="game-card mothchorus-card glass is-locked" data-game="mothchorus" aria-labelledby="mothchorusTitle" aria-describedby="mothchorusRequirement">
+          <div class="card-number">TREE 05 · SECOND GROVE</div>
+          <div class="game-emblem mothchorus-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><span>♡</span>
+          </div>
+          <span id="mothchorusVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE CHOIR LINDEN</span>
+          <h2 id="mothchorusTitle">MOTHCHORUS</h2>
+          <p>Pulse from opposite sides, guide a luminous flock, and bring its many voices home as one song.</p>
+          <div id="mothchorusGate" class="choir-gate" role="status" aria-live="polite">
+            <span aria-hidden="true">◆</span>
+            <div><small>CROWNHEART GATE</small><strong id="mothchorusGateCopy">DEFEAT PRISMBIND TO AWAKEN</strong></div>
+          </div>
+          <div class="mastery-line">
+            <div><span>GROWTH</span><strong id="mothchorusMastery">SLEEPING</strong></div>
+            <div><span>TREE TOTAL</span><strong id="mothchorusTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="mothchorusBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Mothchorus tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="mothchorusProgress"></i></div>
+          <div id="mothchorusNextReward" class="next-reward" aria-label="Mothchorus next rewards">
+            <span><small>NEXT GROWTH</small><strong id="mothchorusNextGrowth">CROWNHEART GATE</strong></span>
+            <span><small>CHOIR SEED</small><strong id="mothchorusNextSkill">6,500 SCORE + 18 / 24 VOICES</strong></span>
+          </div>
+          <div id="mothchorusSeedStatus" class="choir-seed-status" role="status" aria-live="polite">
+            <span aria-hidden="true">✦</span>
+            <div><small>ADVANCED MASTERY SEED</small><strong id="mothchorusSeedState">LISTENING FOR 6,500 + 18 VOICES</strong></div>
+          </div>
+          <button id="mothchorusButton" class="enter-button" type="button" data-play="mothchorus" disabled><span id="mothchorusButtonLabel">DEFEAT PRISMBIND</span><i aria-hidden="true">→</i></button>
+          <small id="mothchorusRequirement">CHOIR SEED: 6,500 SCORE · 18 / 24 VOICES HOME · SOLO OR TOGETHER</small>
+        </article>
       </section>
 
       <section class="sleeping-grove" aria-labelledby="sleepingTitle">
         <div class="sleeping-copy">
           <span class="eyebrow">BEYOND THE CLEARING</span>
-          <h2 id="sleepingTitle"><span id="sleepingCount">Six</span> saplings are still dreaming.</h2>
+          <h2 id="sleepingTitle"><span id="sleepingCount">Five</span> saplings are still dreaming.</h2>
         </div>
         <div id="saplingRow" class="sapling-row"></div>
         <div id="regionStatus" class="region-status glass" aria-live="polite">
           <span class="eyebrow">THE NEXT CLEARING</span>
           <strong id="regionStatusTitle">SLEEPING BEYOND THE CROWNHEART</strong>
-          <small id="regionStatusCopy">Awaken Prismbind to reveal the path toward Trees 05–07.</small>
+          <small id="regionStatusCopy">Defeat Prismbind to awaken Tree 05 and reveal the next clearing.</small>
         </div>
       </section>
 
@@ -269,7 +300,7 @@
         <div class="release-info-grid">
           <section class="release-info-card release-build-card" aria-labelledby="releaseBuildHeading">
             <span id="releaseBuildHeading" class="release-info-label">CURRENT BUILD</span>
-            <strong id="releaseBuildIdentity">0.4.0-rc.7</strong>
+            <strong id="releaseBuildIdentity">0.4.0-rc.8</strong>
             <small>Release candidate · web build</small>
           </section>
 
@@ -349,7 +380,7 @@
 
   <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
 
-  <script src="progression.js?v=0.4.0-rc.7"></script>
-  <script src="grove.js?v=0.4.0-rc.7"></script>
+  <script src="progression.js?v=0.4.0-rc.8"></script>
+  <script src="grove.js?v=0.4.0-rc.8"></script>
 </body>
 </html>

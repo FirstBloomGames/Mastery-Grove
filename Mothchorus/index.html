@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#100d2a">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Mothchorus — pulse together and guide a luminous choir through the moonlit linden.">
+  <title>Mothchorus — First Bloom Games</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="rules.js" defer></script>
+  <script src="projection.js" defer></script>
+  <script src="simulation.js" defer></script>
+  <script src="input.js" defer></script>
+  <script src="renderer.js" defer></script>
+  <script src="audio.js" defer></script>
+  <script src="game.js" defer></script>
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+  <meta name="first-bloom-release" content="0.4.0-rc.8">
+</head>
+<body>
+  <main id="app" class="app" data-mode="title" data-effects="full">
+    <header class="topbar" aria-label="Mothchorus status">
+      <div class="brand-lockup" aria-label="Mothchorus, Tree 05">
+        <span class="tree-number">TREE 05</span>
+        <strong>MOTHCHORUS</strong>
+      </div>
+
+      <div class="run-status">
+        <div class="status-cell status-phase">
+          <span class="status-label">Movement</span>
+          <strong id="phaseLabel">The Call</strong>
+        </div>
+        <div class="status-cell">
+          <span class="status-label">Chorus</span>
+          <strong><span id="voiceCount">24</span><span class="status-muted"> / 24</span></strong>
+        </div>
+        <div class="status-cell">
+          <span class="status-label">Score</span>
+          <strong id="scoreValue">0</strong>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button id="soundButton" class="icon-button" type="button" aria-pressed="true" aria-label="Mute sound">
+          <span aria-hidden="true">♪</span>
+        </button>
+        <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" disabled>
+          <span aria-hidden="true">Ⅱ</span>
+        </button>
+      </div>
+    </header>
+
+    <section id="stage" class="stage" aria-label="Mothchorus play area">
+      <canvas id="gameCanvas" aria-hidden="true"></canvas>
+
+      <div class="objective-ribbon" aria-live="polite">
+        <span id="objectiveSymbol" class="objective-symbol" aria-hidden="true">↔</span>
+        <span id="objectiveText">Choose how you will tend the chorus.</span>
+      </div>
+
+      <div id="chordReadout" class="chord-readout" aria-live="polite">
+        <span class="chord-glyph" aria-hidden="true"><i></i><i></i></span>
+        <span id="chordText">Chord resting</span>
+      </div>
+
+      <button id="leftPulse" class="pulse-zone pulse-zone-left" type="button" aria-label="Left pulse. Bends the chorus right." disabled>
+        <span class="pulse-edge" aria-hidden="true"></span>
+        <span class="pulse-symbol" aria-hidden="true">›</span>
+        <span class="pulse-copy">
+          <strong>LEFT</strong>
+          <small>bends right</small>
+        </span>
+        <span class="recharge-track" aria-hidden="true"><span id="leftRecharge" class="recharge-fill"></span></span>
+      </button>
+
+      <button id="rightPulse" class="pulse-zone pulse-zone-right" type="button" aria-label="Right pulse. Bends the chorus left." disabled>
+        <span class="pulse-edge" aria-hidden="true"></span>
+        <span class="pulse-symbol" aria-hidden="true">‹</span>
+        <span class="pulse-copy">
+          <strong>RIGHT</strong>
+          <small>bends left</small>
+        </span>
+        <span class="recharge-track" aria-hidden="true"><span id="rightRecharge" class="recharge-fill"></span></span>
+      </button>
+
+      <div class="run-progress" aria-hidden="true">
+        <span id="runProgressFill"></span>
+      </div>
+    </section>
+
+    <footer class="footer-note">
+      <span>The Choir Linden</span>
+      <span id="modeLabel">Solo or Together</span>
+      <span id="bestLabel">Best —</span>
+    </footer>
+
+    <section id="titleOverlay" class="overlay is-visible" role="dialog" aria-modal="true" aria-labelledby="titleHeading">
+      <div class="dialog title-dialog">
+        <div class="moth-mark" aria-hidden="true"><span></span><i></i><span></span></div>
+        <p class="eyebrow">THE SECOND GROVE · TREE 05</p>
+        <h1 id="titleHeading">Mothchorus</h1>
+        <p class="tagline">Pulse together. Guide the chorus.</p>
+        <p class="title-intro">Tend one luminous flock from opposite sides of the moonlit garden. A left pulse bends right. A right pulse bends left. Bring both together to form a protective Chord.</p>
+
+        <div class="mode-grid" role="group" aria-label="Choose play mode">
+          <button id="startSolo" class="mode-card mode-solo" type="button">
+            <span class="mode-icon" aria-hidden="true">◇</span>
+            <span><strong>Solo</strong><small>Tend both sides</small></span>
+          </button>
+          <button id="startTogether" class="mode-card mode-together" type="button">
+            <span class="mode-icon duet-icon" aria-hidden="true">◇◇</span>
+            <span><strong>Together</strong><small>Share one screen</small></span>
+          </button>
+        </div>
+
+        <div class="how-to" aria-label="Controls">
+          <span><kbd>A</kbd><kbd>←</kbd> Left</span>
+          <span class="how-chord"><b aria-hidden="true">✦</b> Pair for a Chord</span>
+          <span>Right <kbd>→</kbd><kbd>D</kbd></span>
+        </div>
+
+        <div class="title-options" aria-label="Presentation options">
+          <label><input id="titleSound" type="checkbox" checked> <span>Sound</span></label>
+          <label><input id="reducedMotion" type="checkbox"> <span>Reduced motion</span></label>
+          <label><input id="lowEffects" type="checkbox"> <span>Low effects</span></label>
+        </div>
+
+        <p id="titleBest" class="title-best">No chorus recorded yet.</p>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseHeading" aria-hidden="true" inert>
+      <div class="dialog compact-dialog">
+        <p class="eyebrow">THE CHORUS IS RESTING</p>
+        <h2 id="pauseHeading">Paused</h2>
+        <p>The moths will wait here with you.</p>
+        <div class="dialog-actions">
+          <button id="resumeButton" class="primary-button" type="button">Resume</button>
+          <button id="restartButton" class="secondary-button" type="button">Restart run</button>
+          <button id="titleButton" class="text-button" type="button">Return to title</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="resultHeading" aria-hidden="true" inert>
+      <div class="dialog result-dialog">
+        <div class="result-crown" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+        <p id="resultEyebrow" class="eyebrow">THE CHORUS RETURNS</p>
+        <h2 id="resultHeading">Linden Listener</h2>
+        <p id="resultMessage" class="result-message">Every voice carried home has brightened the tree.</p>
+
+        <div class="result-primary">
+          <div><span>Score</span><strong id="resultScore">0</strong></div>
+          <div><span>Voices home</span><strong id="resultVoices">24 / 24</strong></div>
+        </div>
+
+        <div id="seedResult" class="seed-result">
+          <span class="seed-symbol" aria-hidden="true">◆</span>
+          <span><strong>Choir Seed</strong><small id="seedText">The first Seed is still listening.</small></span>
+        </div>
+
+        <dl class="score-breakdown">
+          <div><dt>Moon gates</dt><dd id="gateScore">0</dd></div>
+          <div><dt>Chords</dt><dd id="chordScore">0</dd></div>
+          <div><dt>Moon-blooms</dt><dd id="bloomScore">0</dd></div>
+          <div><dt>Rescue & finale</dt><dd id="finaleScore">0</dd></div>
+        </dl>
+
+        <p id="recordMessage" class="record-message">A new song for the Choir Linden.</p>
+        <div class="dialog-actions result-actions">
+          <button id="playAgainButton" class="primary-button" type="button">Play again</button>
+          <button id="changeModeButton" class="secondary-button" type="button">Change mode</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="liveRegion" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  </main>
+
+  <noscript>Mothchorus needs JavaScript to awaken the choir.</noscript>
+</body>
+</html>

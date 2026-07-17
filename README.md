@@ -1,6 +1,10 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.7**
+Current build: **0.4.0-rc.8**
+
+This candidate integrates **Mothchorus** as Tree 05 and the first advanced discipline of the Second Grove. The Choir Linden is visible but locked until the player defeats Prismbind and permanently awakens the Crownheart. Once unlocked, Solo and Together runs share the same rules, score ceiling, Best lane, Tree Total, growth, and Choir Seed proof. Profile v5 strictly migrates existing rc.7 progress in place, and the parent Grove validates every Mothchorus run lifecycle and result before applying it exactly once.
+
+The Choir Seed requires one completed chorus scoring at least 6,500 with at least 18 of 24 voices returned. The Seed remains independent of the three foundational Seeds and does not alter the First Grove Trial. The Choir Linden grows cumulatively at 6,500, 18,000, 36,000, 65,000, and 100,000 Tree Total. The same candidate also includes D-027 Thread Mercy: Lumenloom enemies require 2.5 seconds of continuous thread contact to fray a segment, extended to 2.9 seconds by Golden Fiber.
 
 This candidate makes the Mastery Grove itself answer the player without restoring continuous visual cost. Every tree now responds immediately to selection, exposes its next growth and skill reward, remembers completed trees for the current visit, and receives accepted scores through a save-first return ceremony with an exact total count-up. Strict personal bests, matched bests, and runs within 90% of the prior lane best receive honest outcome language. Completing all three foundational games in one visit awakens one decorative Grove Harmony. Four short locally synthesized tree voices are optional through a dedicated Grove sound control; reduced motion resolves the same information without score travel or motes. All new effects are discrete, capped, dependency-free, and return to rest.
 
@@ -10,7 +14,7 @@ This hotfix addresses real-phone lag in the Mastery Grove selection screen. Mobi
 
 This candidate completes Lumenloom's portrait-mobile release pass and Garden Awakening spectacle. It adds relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding from Mastery Grove. The garden now carries five distinct night atmospheres, shape-backed target guidance, layered luminous thread and knots, persistent capped awakening marks, closure bloom waves, a responsive Hollow Guardian, and staged dawn. Mastery Grove also quiets its game bar during active play while preserving a clear 44px return control. Desktop and mobile share the same gameplay rules, scoring, progression, results, saves, and Grove protocol.
 
-This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, and Prismbind. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
+This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, Prismbind, and Mothchorus. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
 
 This D-025 candidate adds release-validation and public-trust infrastructure without changing gameplay or progression. The Grove exposes factual build, local-data, review-status, feedback, and user-initiated diagnostic information. Manual device and uncoached validation materials live under `release-validation/` and are intentionally excluded from the public payload. No analytics, automatic telemetry, ad SDK, account, or remote save service is introduced.
 
@@ -28,7 +32,7 @@ Publish or zip the **contents of `dist`**. Its stable public entrypoint is `dist
 
 ## Local play
 
-Double-click **PLAY MASTERY GROVE.cmd**. It rebuilds the release and serves only `dist` at `http://127.0.0.1:4173/`, giving all four games one predictable browser storage origin. Keep its terminal window open while playing.
+Double-click **PLAY MASTERY GROVE.cmd**. It rebuilds the release and serves only `dist` at `http://127.0.0.1:4173/`, giving all five arcade games one predictable browser storage origin. Keep its terminal window open while playing.
 
 Equivalent commands:
 

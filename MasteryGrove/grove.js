@@ -22,7 +22,8 @@
     lumenloom: Object.freeze({ select: Object.freeze([392, 587.33]), growth: Object.freeze([587.33, 783.99]), wave: 'sine' }),
     bloomfold: Object.freeze({ select: Object.freeze([329.63, 493.88]), growth: Object.freeze([493.88, 659.25]), wave: 'triangle' }),
     ripplewake: Object.freeze({ select: Object.freeze([261.63, 392]), growth: Object.freeze([392, 523.25]), wave: 'sine' }),
-    prismbind: Object.freeze({ select: Object.freeze([293.66, 440]), growth: Object.freeze([440, 659.25]), wave: 'triangle' })
+    prismbind: Object.freeze({ select: Object.freeze([293.66, 440]), growth: Object.freeze([440, 659.25]), wave: 'triangle' }),
+    mothchorus: Object.freeze({ select: Object.freeze([349.23, 523.25]), growth: Object.freeze([523.25, 698.46]), wave: 'sine' })
   });
 
   const GAMES = {
@@ -33,6 +34,7 @@
       number: 'TREE 01',
       path: '../Lumenloom/index.html',
       standaloneKey: 'lumenloom-best',
+      importStandaloneBest: true,
       color: '#ffd773',
       symbol: '✦'
     },
@@ -43,6 +45,7 @@
       number: 'TREE 02',
       path: '../Bloomfold/index.html',
       standaloneKey: 'bloomfold-best',
+      importStandaloneBest: true,
       color: '#82f4ee',
       symbol: '◇'
     },
@@ -53,6 +56,7 @@
       number: 'TREE 03',
       path: '../Ripplewake/index.html',
       standaloneKey: 'ripplewake-best',
+      importStandaloneBest: true,
       color: '#ff9b85',
       symbol: '≋'
     },
@@ -63,14 +67,27 @@
       number: 'TREE 04 · GUARDIAN',
       path: '../Prismbind/index.html',
       standaloneKey: 'prismbind-best',
+      importStandaloneBest: true,
       color: '#d7c6ff',
       symbol: '◆'
+    },
+    mothchorus: {
+      id: 'mothchorus',
+      title: 'MOTHCHORUS',
+      tree: 'THE CHOIR LINDEN',
+      number: 'TREE 05 · SECOND GROVE',
+      path: '../Mothchorus/index.html',
+      standaloneKey: 'mothchorus-best-v1',
+      importStandaloneBest: false,
+      color: '#80e5c4',
+      symbol: '♡'
     }
   };
 
   const GROWTH_STAGES = progression.GROWTH_STAGES;
   const FOUNDATIONAL_GAME_IDS = progression.FOUNDATIONAL_GAME_IDS;
   const GAME_IDS = progression.ALL_GAME_IDS;
+  const FIRST_TREE_PART_COUNT = progression.FIRST_TREE_PART_COUNT || 4;
   const MAX_BLOOM_MARKS = FOUNDATIONAL_GAME_IDS.length * (GROWTH_STAGES.length - 1);
 
   const ui = {
@@ -120,6 +137,21 @@
     prismbindButton: $('prismbindButton'),
     prismbindButtonLabel: $('prismbindButtonLabel'),
     prismbindRequirement: $('prismbindRequirement'),
+    mothchorusCard: $('mothchorusCard'),
+    mothchorusMastery: $('mothchorusMastery'),
+    mothchorusTotal: $('mothchorusTotal'),
+    mothchorusBest: $('mothchorusBest'),
+    mothchorusProgress: $('mothchorusProgress'),
+    mothchorusNextGrowth: $('mothchorusNextGrowth'),
+    mothchorusNextSkill: $('mothchorusNextSkill'),
+    mothchorusVisitMark: $('mothchorusVisitMark'),
+    mothchorusGate: $('mothchorusGate'),
+    mothchorusGateCopy: $('mothchorusGateCopy'),
+    mothchorusSeedStatus: $('mothchorusSeedStatus'),
+    mothchorusSeedState: $('mothchorusSeedState'),
+    mothchorusButton: $('mothchorusButton'),
+    mothchorusButtonLabel: $('mothchorusButtonLabel'),
+    mothchorusRequirement: $('mothchorusRequirement'),
     lumenloomSeed: $('lumenloomSeed'),
     bloomfoldSeed: $('bloomfoldSeed'),
     ripplewakeSeed: $('ripplewakeSeed'),
@@ -491,6 +523,7 @@
       sourceText = localStorage.getItem(STORAGE_KEY);
       backupText = localStorage.getItem(BACKUP_STORAGE_KEY);
       for (const game of Object.values(GAMES)) {
+        if (!game.importStandaloneBest) continue;
         const value = Number(localStorage.getItem(game.standaloneKey));
         if (Number.isSafeInteger(value) && value >= 0) standaloneBests[game.id] = value;
       }
@@ -609,11 +642,10 @@
       bloomGrowth,
       rippleGrowth,
       marks,
-      // Preserve the shipping First Tree scale. Prismbind's Guardian crown is
-      // layered separately, so this denominator intentionally remains tied to
-      // the complete registered game set rather than changing visual growth in
-      // a performance-only hotfix.
-      overallGrowth: (lumenGrowth.progress + bloomGrowth.progress + rippleGrowth.progress) / (GAME_IDS.length * 100),
+      // Preserve the shipping First Tree scale: three foundational disciplines
+      // plus the separately drawn Guardian crown. Later registries must never
+      // shrink an existing player's tree by increasing this denominator.
+      overallGrowth: (lumenGrowth.progress + bloomGrowth.progress + rippleGrowth.progress) / (FIRST_TREE_PART_COUNT * 100),
       guardianUnlocked: Boolean(profile?.unlocks?.prismbind),
       guardianAwakened: Boolean(profile?.regions?.secondGroveUnlocked),
       secondGroveRevealed: Boolean(profile?.regions?.trees05To07Revealed)
@@ -639,7 +671,7 @@
     ui.headerBloomCount.textContent = `${marks} / ${MAX_BLOOM_MARKS} BLOOM MARKS`;
     ui.groveRank.textContent = rank.name;
     ui.groveMessage.textContent = profile.regions.secondGroveUnlocked
-      ? 'The Crownheart is awake. A violet path now reaches toward the next clearing.'
+      ? 'The Crownheart is awake. The Choir Linden now listens in the Second Grove.'
       : profile.unlocks.prismbind
         ? 'Three Mastery Seeds answer as one. The Crownheart Guardian is ready.'
         : rank.message;
@@ -666,13 +698,33 @@
         : 'GUARDIAN AWAKE · THREE DISCIPLINES, ONE RUN'
       : `${seedCount} / 3 MASTERY SEEDS · PEAK SKILL, NOT TREE TOTAL`;
 
+    const mothUnlocked = progression.isGameUnlocked(profile, 'mothchorus');
+    const mothSeedEarned = Boolean(profile.games.mothchorus.masterySeed);
+    ui.mothchorusCard.classList.toggle('is-locked', !mothUnlocked);
+    ui.mothchorusCard.setAttribute('aria-disabled', String(!mothUnlocked));
+    ui.mothchorusButton.disabled = !mothUnlocked;
+    ui.mothchorusButtonLabel.textContent = mothUnlocked ? 'PLAY MOTHCHORUS' : 'DEFEAT PRISMBIND';
+    ui.mothchorusGate.classList.toggle('is-open', mothUnlocked);
+    ui.mothchorusGateCopy.textContent = mothUnlocked
+      ? 'CROWNHEART AWAKENED · CHOIR PATH OPEN'
+      : 'DEFEAT PRISMBIND TO AWAKEN';
+    ui.mothchorusSeedStatus.classList.toggle('is-earned', mothSeedEarned);
+    ui.mothchorusSeedState.textContent = mothSeedEarned
+      ? 'CHOIR SEED EARNED · PERMANENT'
+      : 'LISTENING FOR 6,500 + 18 VOICES';
+    ui.mothchorusRequirement.textContent = mothUnlocked
+      ? mothSeedEarned
+        ? 'CHOIR SEED EARNED · SOLO AND TOGETHER BOTH FEED THIS TREE'
+        : 'CHOIR SEED: 6,500 SCORE · 18 / 24 VOICES HOME · SOLO OR TOGETHER'
+      : 'LOCKED · DEFEAT PRISMBIND AND AWAKEN THE CROWNHEART';
+
     ui.regionStatus.classList.toggle('is-revealed', profile.regions.trees05To07Revealed);
     ui.regionStatusTitle.textContent = profile.regions.trees05To07Revealed
-      ? 'THE VIOLET PATH IS VISIBLE'
+      ? 'THE CHOIR LINDEN IS LISTENING'
       : 'SLEEPING BEYOND THE CROWNHEART';
     ui.regionStatusCopy.textContent = profile.regions.trees05To07Revealed
-      ? 'Trees 05–07 wait in the next clearing. Their games are still being cultivated.'
-      : 'Awaken Prismbind to reveal the path toward Trees 05–07.';
+      ? 'Tree 05 is awake. Trees 06–07 remain visible as future disciplines in the Second Grove.'
+      : 'Defeat Prismbind to awaken Tree 05 and reveal the next clearing.';
 
     const trialReady = FOUNDATIONAL_GAME_IDS.every((gameId) => profile.games[gameId].completed);
     ui.trialButton.disabled = !trialReady;
@@ -693,19 +745,21 @@
     const best = ui[`${gameId}Best`];
     const progressBar = ui[`${gameId}Progress`];
     const visibleBest = Math.max(record.standardBest, record.assistedBest);
-    mastery.textContent = gameId === 'prismbind' && !profile.unlocks.prismbind ? 'SLEEPING' : growth.name;
+    mastery.textContent = progression.isGameUnlocked(profile, gameId) ? growth.name : 'SLEEPING';
     total.textContent = formatNumber(record.totalScore);
     best.textContent = formatNumber(visibleBest);
     best.title = record.assistedBest > record.standardBest
       ? `Standard best ${formatNumber(record.standardBest)}; assisted best ${formatNumber(record.assistedBest)}`
       : `Standard-play best ${formatNumber(record.standardBest)}`;
     progressBar.style.width = `${growth.progress}%`;
+    const nextReward = progression.nextRewardFor(profile, gameId);
     const track = progressBar.parentElement;
     track.setAttribute('aria-valuenow', String(Math.round(growth.progress)));
-    track.setAttribute('aria-valuetext', growth.nextThreshold === null
-      ? `${growth.name}, maximum growth`
-      : `${growth.name}, ${formatNumber(growth.pointsToNext)} points to ${GROWTH_STAGES[growth.level + 1]}`);
-    const nextReward = progression.nextRewardFor(profile, gameId);
+    track.setAttribute('aria-valuetext', !progression.isGameUnlocked(profile, gameId) && nextReward
+      ? `${nextReward.growthLabel}. ${nextReward.skillLabel}.`
+      : growth.nextThreshold === null
+        ? `${growth.name}, maximum growth`
+        : `${growth.name}, ${formatNumber(growth.pointsToNext)} points to ${GROWTH_STAGES[growth.level + 1]}`);
     const nextGrowth = ui[`${gameId}NextGrowth`];
     const nextSkill = ui[`${gameId}NextSkill`];
     if (nextReward && nextGrowth && nextSkill) {
@@ -718,12 +772,13 @@
 
   function buildSaplings() {
     const symbols = ['◌', '⌇', '△', '≈', '◈', '∿', '○', '✧'];
-    const sleepingCount = Math.max(0, COLLECTION_SIZE - GAME_IDS.length);
+    const firstSleepingTree = Math.max(6, GAME_IDS.length + 1);
+    const sleepingCount = Math.max(0, COLLECTION_SIZE - firstSleepingTree + 1);
     const numberWords = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
     ui.sleepingCount.textContent = numberWords[sleepingCount] || String(sleepingCount);
     ui.saplingRow.replaceChildren();
     for (let index = 0; index < sleepingCount; index += 1) {
-      const treeNumber = GAME_IDS.length + index + 1;
+      const treeNumber = firstSleepingTree + index;
       const revealed = profile.regions.trees05To07Revealed && treeNumber <= 7;
       const sapling = document.createElement('div');
       sapling.className = `sapling${revealed ? ' is-revealed' : ''}`;
@@ -782,7 +837,7 @@
     clearTimeout(readyTimer);
     activeGameId = gameId;
     activeSessionId = createSessionId();
-    const created = progression.createSession(gameId, activeSessionId);
+    const created = progression.createSession(gameId, activeSessionId, profile);
     if (!created.ok) {
       showToast('The tree could not create a safe play session. Please try again.');
       activeGameId = null;
@@ -962,7 +1017,9 @@
         lane: feedback?.lane || (result.assisted ? 'assisted' : 'standard')
       });
     }
-    applied.rewards.filter((reward) => reward.type !== 'growth-stage').forEach(enqueueCeremony);
+    applied.rewards
+      .filter((reward) => reward.type !== 'growth-stage')
+      .forEach((reward) => enqueueCeremony({ ...reward, sourceGameId: gameId }));
     if (harmonyAwakened) enqueueCeremony({ type: 'session-harmony', sourceGameId: gameId });
     updateProfileUI();
     buildSaplings();
@@ -1050,6 +1107,19 @@
     }
 
     if (ceremony.type === 'mastery-seed') {
+      if (ceremony.gameId === 'mothchorus') {
+        ui.ceremonyKicker.textContent = 'CHOIR SEED EARNED';
+        ui.growthTitle.textContent = 'The Choir Linden holds your song.';
+        ui.growthCopy.textContent = 'A complete chorus returned with both score and voices in balance. This advanced-discipline Seed is permanent.';
+        ui.growthRunLabel.textContent = 'BEST SCORE';
+        ui.growthRunScore.textContent = formatNumber(Math.max(record.standardBest, record.assistedBest));
+        ui.growthScoreLabel.textContent = 'VOICE THRESHOLD';
+        ui.growthScore.textContent = `${ceremony.voiceThreshold || 18} / 24`;
+        ui.growthMasteryLabel.textContent = 'ADVANCED SEED';
+        ui.growthMastery.textContent = 'CHOIR SEED';
+        ui.growthNextReward.textContent = [gameReward?.growthLabel, 'RETURN TO THE CHORUS'].filter(Boolean).join(' · ');
+        return;
+      }
       ui.ceremonyKicker.textContent = 'MASTERY SEED EARNED';
       ui.growthTitle.textContent = `${game.tree} yielded its Seed.`;
       ui.growthCopy.textContent = 'Peak human-controlled skill awakened this permanent key. Accessibility assists remain content-eligible, and the Seed can never be lost.';
@@ -1099,15 +1169,15 @@
     }
 
     ui.ceremonyKicker.textContent = 'THE CROWNHEART ANSWERS';
-    ui.growthTitle.textContent = 'The next clearing is revealed.';
-    ui.growthCopy.textContent = 'Prismbind’s Guardian has been overcome. A violet path now marks the future homes of Trees 05–07.';
+    ui.growthTitle.textContent = 'The Choir Linden is listening.';
+    ui.growthCopy.textContent = 'Prismbind’s Guardian has been overcome. A violet path reaches Tree 05, where twenty-four luminous voices wait for a Keeper.';
     ui.growthRunLabel.textContent = 'GUARDIAN';
     ui.growthRunScore.textContent = 'AWAKENED';
     ui.growthScoreLabel.textContent = 'REGION';
     ui.growthScore.textContent = 'SECOND GROVE';
     ui.growthMasteryLabel.textContent = 'PATH';
     ui.growthMastery.textContent = 'REVEALED';
-    ui.growthNextReward.textContent = 'TREES 05–07 ARE NOW VISIBLE BEYOND THE CROWNHEART';
+    ui.growthNextReward.textContent = 'TREE 05 · MOTHCHORUS NOW PLAYABLE · TREES 06–07 REVEALED';
   }
 
   function showNextCeremony() {
@@ -1215,13 +1285,14 @@
       resetArmed = true;
       resetTimer = now + 8000;
       ui.resetProgressButton.textContent = 'Click again to confirm reset';
-      showToast('This will erase Grove totals, Seeds, Trials, gallery specimens, and all four standalone bests in this browser.');
+      showToast('This will erase Grove totals, Seeds, Trials, gallery specimens, and all five standalone bests in this browser.');
       return;
     }
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(BACKUP_STORAGE_KEY);
       localStorage.removeItem('bloomfold-specimens');
+      localStorage.removeItem('mothchorus-playtest-v1');
       Object.values(GAMES).forEach((game) => localStorage.removeItem(game.standaloneKey));
       storageAvailable = true;
       storageReadOnly = false;

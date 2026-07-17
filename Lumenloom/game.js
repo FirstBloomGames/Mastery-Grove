@@ -110,6 +110,11 @@
       atmosphere: 'static-composition'
     })
   });
+  const FRAY_BALANCE = Object.freeze({
+    canon: 'D-027',
+    baseWindow: 2.5,
+    goldenFiberBonus: 0.4
+  });
 
   function hash01(value) {
     const x = Math.sin(Number(value) * 12.9898 + 78.233) * 43758.5453123;
@@ -356,12 +361,26 @@
 
   const blessingDefs = [
     { id: 'longer', symbol: '∞', name: 'Longer Thread', copy: '+25 maximum lumen. Brave shapes can stretch farther.' },
-    { id: 'golden', symbol: '⌛', name: 'Golden Fiber', copy: 'Fraying thread holds 0.4 seconds longer before it breaks.' },
+    { id: 'golden', symbol: '⌛', name: 'Golden Fiber', copy: `Fraying thread holds ${FRAY_BALANCE.goldenFiberBonus.toFixed(1)} seconds longer before it breaks.` },
     { id: 'quickwing', symbol: '❯', name: 'Quickwing', copy: 'Glide 12% faster and turn with a little more grace.' },
     { id: 'nectar', symbol: '✦', name: 'Night Nectar', copy: 'Every sealed loop restores 10 additional lumen.' },
     { id: 'ward', symbol: '◇', name: 'Petal Ward', copy: 'The next shadow touch or moonfall cannot take a petal.' },
     { id: 'echo', symbol: '↟', name: 'Echo Bloom', copy: 'Chain-weave time lasts 2 seconds longer between loops.' }
   ];
+
+  function createDefaultUpgrades() {
+    return {
+      speed: 1,
+      frayWindow: FRAY_BALANCE.baseWindow,
+      captureRefund: 16,
+      chainWindow: 6,
+      ward: false
+    };
+  }
+
+  function applyGoldenFiber(upgrades = state.upgrades) {
+    upgrades.frayWindow += FRAY_BALANCE.goldenFiberBonus;
+  }
 
   const state = {
     mode: 'title',
@@ -406,13 +425,7 @@
     dawn: 0,
     completed: false,
     tutorialStep: 0,
-    upgrades: {
-      speed: 1,
-      frayWindow: 0.85,
-      captureRefund: 16,
-      chainWindow: 6,
-      ward: false
-    },
+    upgrades: createDefaultUpgrades(),
     player: {
       x: W / 2,
       y: H / 2,
@@ -915,7 +928,7 @@
     state.dawn = 0;
     state.completed = false;
     state.tutorialStep = 0;
-    state.upgrades = { speed: 1, frayWindow: 0.85, captureRefund: 16, chainWindow: 6, ward: false };
+    state.upgrades = createDefaultUpgrades();
     state.player = { x: playBounds.centerX, y: playBounds.centerY, vx: 0, vy: 0, facing: -Math.PI / 2, invulnerable: 1.1, wing: 0 };
     ui.hud.classList.remove('is-hidden');
     closeDialogs(canvas);
@@ -1330,6 +1343,7 @@
 
   function sealWeave(polygon) {
     const now = state.runTime;
+    const rescuedFray = state.frayTimer > 0;
     const chainWasAlive = now - state.lastLoopAt <= state.upgrades.chainWindow;
     state.comboStack = chainWasAlive ? Math.min(6, state.comboStack + 1) : 0;
     const chainMultiplier = 1 + state.comboStack * 0.25;
@@ -1420,6 +1434,10 @@
 
     state.enemies = state.enemies.filter((e) => !e.dead);
     clearWeave();
+    if (rescuedFray) {
+      state.toastTimer = 0;
+      ui.toast.classList.remove('is-visible', 'is-warning');
+    }
     updateObjective();
 
     if (phaseDefs[state.phaseIndex].boss && bossHit) {
@@ -1433,6 +1451,8 @@
       }
     } else if (state.phaseProgress >= state.phaseTarget) {
       completePhase();
+    } else if (rescuedFray) {
+      showToast('THREAD HELD — loop sealed!', false, 1.35);
     }
   }
 
@@ -1824,7 +1844,7 @@
       state.maxLumen += 25;
       state.lumen = state.maxLumen;
     } else if (blessing.id === 'golden') {
-      state.upgrades.frayWindow += 0.4;
+      applyGoldenFiber();
     } else if (blessing.id === 'quickwing') {
       state.upgrades.speed += 0.12;
     } else if (blessing.id === 'nectar') {
@@ -3391,6 +3411,143 @@
     });
   }
 
+  function getFrayQaSnapshot() {
+    return Object.freeze({
+      profile: controlProfile,
+      chainLength: state.chain.length,
+      frayTimer: Math.max(0, state.frayTimer),
+      frayMax: state.frayMax,
+      cleanWeave: state.cleanWeave,
+      comboStack: state.comboStack,
+      lumen: state.lumen,
+      lives: state.lives,
+      frayWindow: state.upgrades.frayWindow,
+      toastText: ui.toast.textContent,
+      toastVisible: ui.toast.classList.contains('is-visible'),
+      toastWarning: ui.toast.classList.contains('is-warning')
+    });
+  }
+
+  function setFrayContactScenario(goldenFibers = 0) {
+    if (state.mode !== 'playing') throw new Error('Start a Lumenloom run before configuring a fray QA scenario.');
+    const goldenCount = Number(goldenFibers);
+    if (!Number.isInteger(goldenCount) || goldenCount < 0 || goldenCount > 3) {
+      throw new RangeError('Golden Fiber QA count must be an integer from 0 to 3.');
+    }
+    state.upgrades.frayWindow = FRAY_BALANCE.baseWindow;
+    for (let i = 0; i < goldenCount; i++) applyGoldenFiber();
+
+    const halfSegment = clamp(playBounds.width * 0.22, 72, 130);
+    const segmentY = clamp(
+      playBounds.centerY - Math.min(50, playBounds.height * 0.08),
+      playBounds.top + 40,
+      playBounds.bottom - 100
+    );
+    const makeAnchor = (id, x, y = segmentY) => ({
+      id,
+      x,
+      y,
+      guide: -1,
+      radius: ANCHOR_RADIUS,
+      touchCooldown: 0,
+      awakened: false,
+      bloom: 0,
+      hue: 180,
+      phase: 0
+    });
+    const leftAnchor = makeAnchor(-27001, playBounds.centerX - halfSegment);
+    const rightAnchor = makeAnchor(-27002, playBounds.centerX + halfSegment);
+    const closingAnchor = makeAnchor(
+      -27004,
+      playBounds.centerX,
+      clamp(segmentY + Math.min(96, playBounds.height * 0.2), playBounds.top + 40, playBounds.bottom - 40)
+    );
+
+    state.mode = 'playing';
+    state.phaseIndex = 2;
+    state.phaseProgress = 0;
+    state.phaseTarget = phaseDefs[2].target;
+    state.phaseTime = phaseDefs[state.phaseIndex].time;
+    state.phaseIntroTimer = 0;
+    ui.phaseBanner.classList.remove('is-visible');
+    state.spawnTimer = Infinity;
+    state.anchors = [leftAnchor, rightAnchor, closingAnchor];
+    state.chain = [leftAnchor.id, rightAnchor.id, closingAnchor.id];
+    state.frayTimer = 0;
+    state.frayMax = 0;
+    state.weaveAge = 0;
+    state.cleanWeave = true;
+    state.comboStack = 3;
+    state.maxLumen = 100;
+    state.lumen = 80;
+    state.lives = 3;
+    state.player = {
+      x: playBounds.left,
+      y: playBounds.bottom,
+      vx: 0,
+      vy: 0,
+      facing: -Math.PI / 2,
+      invulnerable: 0,
+      wing: 0
+    };
+    state.enemies = [{
+      id: -27003,
+      type: 'seeker',
+      x: playBounds.centerX,
+      y: segmentY,
+      vx: 0,
+      vy: 0,
+      radius: 19,
+      speed: 0,
+      phase: 0,
+      age: 0,
+      frayCooldown: 0,
+      chargeCooldown: 3,
+      chargeState: 'idle',
+      chargeTimer: 0,
+      chargeX: 0,
+      chargeY: 0,
+      hp: 1,
+      invulnerable: 0,
+      dead: false
+    }];
+
+    // Arm the warning through the real Seeker-to-thread collision path.
+    updatePlaying(0);
+    return getFrayQaSnapshot();
+  }
+
+  function rescueFrayingWeaveForQa() {
+    if (state.mode !== 'playing' || state.frayTimer <= 0 || state.chain.length < 3) {
+      throw new Error('Configure a closure-ready fray QA scenario before rescuing it.');
+    }
+    tryCloseWeave();
+    return getFrayQaSnapshot();
+  }
+
+  function triggerMoonfallDuringFrayForQa() {
+    if (state.mode !== 'playing' || state.frayTimer <= 0 || !state.chain.length) {
+      throw new Error('Configure an active fray QA scenario before triggering Moonfall.');
+    }
+    state.upgrades.ward = false;
+    handleMoonfall();
+    return getFrayQaSnapshot();
+  }
+
+  function advanceGameplayForQa(seconds) {
+    const duration = Number(seconds);
+    if (!Number.isFinite(duration) || duration < 0 || duration > 10) {
+      throw new RangeError('QA gameplay duration must be a finite value from 0 to 10 seconds.');
+    }
+    let remaining = duration;
+    while (remaining > 1e-9 && state.chain.length) {
+      const dt = Math.min(1 / 60, remaining);
+      updatePlaying(dt);
+      remaining = Math.max(0, remaining - dt);
+    }
+    return getFrayQaSnapshot();
+  }
+
   const qaHostAllowed = window.location.protocol === 'file:'
     || ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
 
@@ -3401,6 +3558,11 @@
       getControlProfile: () => controlProfile,
       getPlayBounds: () => Object.freeze({ ...playBounds }),
       getGeometrySnapshot,
+      getFrayBalance: () => FRAY_BALANCE,
+      setFrayContactScenario,
+      rescueFrayingWeaveForQa,
+      triggerMoonfallDuringFrayForQa,
+      advanceGameplayForQa,
       getVisualConstants: () => VISUAL_CONSTANTS,
       getVisualContract: () => VISUAL_CONSTANTS,
       getVisualSnapshot,
@@ -3429,7 +3591,7 @@
     if (!pageParams.has('qa') || !qaHostAllowed) return;
     const panel = document.createElement('aside');
     panel.setAttribute('aria-label', 'QA controls');
-    panel.style.cssText = 'position:fixed;left:8px;top:92px;z-index:1000;display:flex;gap:5px;padding:6px;background:#09091ddd;border:1px solid #ffd97755;border-radius:8px;font:700 9px system-ui;color:#fff;pointer-events:auto';
+    panel.style.cssText = 'position:fixed;left:8px;top:92px;z-index:1000;display:flex;flex-wrap:wrap;max-width:min(520px,calc(100vw - 16px));gap:5px;padding:6px;background:#09091ddd;border:1px solid #ffd97755;border-radius:8px;font:700 9px system-ui;color:#fff;pointer-events:auto';
 
     const addButton = (label, action) => {
       const button = document.createElement('button');
@@ -3441,6 +3603,26 @@
     };
 
     addButton('QA START', () => startRun());
+    addButton('QA FRAY', () => {
+      if (state.mode !== 'playing') startRun();
+      setFrayContactScenario();
+      updateHud();
+    });
+    addButton('QA +0.86', () => {
+      if (state.mode !== 'playing' || state.frayTimer <= 0) return;
+      advanceGameplayForQa(0.86);
+      updateHud();
+    });
+    addButton('QA EXPIRE', () => {
+      if (state.mode !== 'playing' || state.frayTimer <= 0) return;
+      advanceGameplayForQa(state.frayTimer + 0.02);
+      updateHud();
+    });
+    addButton('QA GOLDEN FRAY', () => {
+      startRun();
+      setFrayContactScenario(1);
+      updateHud();
+    });
     addButton('QA COMPLETE PHASE', () => {
       if (state.mode !== 'playing') return;
       state.phaseProgress = state.phaseTarget;

@@ -7,7 +7,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createMasteryGroveProgression() {
   "use strict";
 
-  const PROFILE_VERSION = 4;
+  const PROFILE_VERSION = 5;
+  const LEGACY_PROFILE_VERSION = 4;
   // The collection's existing bridge is version 1. D-020 hardens that
   // contract with a parent-issued sessionId without needlessly breaking all
   // four clients on an identifier-only version bump.
@@ -15,10 +16,19 @@
   const EXPORT_KIND = "first-bloom-grove-profile";
   const EXPORT_VERSION = 1;
   const MAX_COUNTER = Number.MAX_SAFE_INTEGER;
+  const FIRST_TREE_PART_COUNT = 4;
 
   const FOUNDATIONAL_GAME_IDS = Object.freeze(["lumenloom", "bloomfold", "ripplewake"]);
-  const ALL_GAME_IDS = Object.freeze([...FOUNDATIONAL_GAME_IDS, "prismbind"]);
+  const LEGACY_GAME_IDS = Object.freeze([...FOUNDATIONAL_GAME_IDS, "prismbind"]);
+  const ALL_GAME_IDS = Object.freeze([...LEGACY_GAME_IDS, "mothchorus"]);
   const GROWTH_STAGES = Object.freeze(["SEED", "BUD", "BRONZE", "SILVER", "GOLD", "FULL BLOOM"]);
+  const MOTHCHORUS_RANKS = deepFreeze([
+    { minimum: 0, name: "FIRST VOICE" },
+    { minimum: 4500, name: "MOONCALLER" },
+    { minimum: 6500, name: "LINDEN KEEPER" },
+    { minimum: 8000, name: "HEARTLIGHT CHOIR" },
+    { minimum: 9500, name: "CROWN CHORUS" }
+  ]);
 
   function deepFreeze(value) {
     if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -34,6 +44,7 @@
       trialBenchmark: 14000,
       seedThreshold: 9500,
       seedRequiresVictory: true,
+      seedEligible: true,
       foundational: true
     },
     bloomfold: {
@@ -43,6 +54,7 @@
       trialBenchmark: 7000,
       seedThreshold: 4500,
       seedRequiresVictory: true,
+      seedEligible: true,
       foundational: true
     },
     ripplewake: {
@@ -52,6 +64,7 @@
       trialBenchmark: 18000,
       seedThreshold: 12000,
       seedRequiresVictory: false,
+      seedEligible: true,
       foundational: true
     },
     prismbind: {
@@ -61,9 +74,25 @@
       trialBenchmark: 36000,
       seedThreshold: null,
       seedRequiresVictory: false,
+      seedEligible: false,
+      foundational: false
+    },
+    mothchorus: {
+      id: "mothchorus",
+      tree: "THE CHOIR LINDEN",
+      thresholds: [0, 6500, 18000, 36000, 65000, 100000],
+      trialBenchmark: null,
+      seedThreshold: 6500,
+      seedVoiceThreshold: 18,
+      seedRequiresVictory: true,
+      seedEligible: true,
       foundational: false
     }
   });
+
+  const SEED_ELIGIBLE_GAME_IDS = Object.freeze(
+    ALL_GAME_IDS.filter((gameId) => GAME_DEFINITIONS[gameId].seedEligible)
+  );
 
   const GROVE_RANKS = deepFreeze([
     { marks: 0, name: "FIRST SPROUT", message: "Three arcade seeds are awake. Every finished run feeds its own tree." },
@@ -193,12 +222,90 @@
     return Object.freeze({ ok: false, code, ...details });
   }
 
+  function canonicalMothchorusRank(score) {
+    if (!isCounter(score) || score > 10000) return null;
+    let rank = MOTHCHORUS_RANKS[0].name;
+    for (const candidate of MOTHCHORUS_RANKS) {
+      if (score >= candidate.minimum) rank = candidate.name;
+    }
+    return rank;
+  }
+
+  function isCanonicalGameRecord(record, gameId) {
+    if (!hasExactKeys(record, GAME_RECORD_KEYS)) return false;
+    if (![record.totalScore, record.standardBest, record.assistedBest, record.plays, record.victories, record.lastScore].every(isCounter)) return false;
+    if (record.totalScore < record.standardBest || record.totalScore < record.assistedBest || record.totalScore < record.lastScore) return false;
+    if (typeof record.completed !== "boolean" || typeof record.masterySeed !== "boolean" || typeof record.seedCeremonySeen !== "boolean") return false;
+    if (typeof record.lastRank !== "string" || !record.lastRank || record.lastRank.length > 48) return false;
+    if (!GAME_DEFINITIONS[gameId].seedEligible && record.masterySeed) return false;
+    if (!record.masterySeed && record.seedCeremonySeen) return false;
+    if ((record.victories > 0 || record.masterySeed) && !record.completed) return false;
+    return true;
+  }
+
+  function hasCanonicalProfileShell(profile, version, gameIds, allowVictoryLatchRepair = false) {
+    if (!hasExactKeys(profile, PROFILE_KEYS) || profile.version !== version) return false;
+    if (typeof profile.introSeen !== "boolean") return false;
+    if (!hasExactKeys(profile.games, gameIds)) return false;
+    if (![profile.trialBest, profile.trialsCompleted, profile.legacyTrialBest, profile.legacyTrialsCompleted].every(isCounter)) return false;
+    if (!(profile.updatedAt === null || (typeof profile.updatedAt === "string" && profile.updatedAt.length <= 64))) return false;
+    if (!gameIds.every((gameId) => isCanonicalGameRecord(profile.games[gameId], gameId))) return false;
+
+    if (!hasExactKeys(profile.unlocks, UNLOCK_KEYS)) return false;
+    if (typeof profile.unlocks.prismbind !== "boolean" || typeof profile.unlocks.prismbindCeremonySeen !== "boolean") return false;
+    if (!profile.unlocks.prismbind && profile.unlocks.prismbindCeremonySeen) return false;
+    if (FOUNDATIONAL_GAME_IDS.every((gameId) => profile.games[gameId].masterySeed) && !profile.unlocks.prismbind) return false;
+
+    if (!hasExactKeys(profile.regions, REGION_KEYS)) return false;
+    if (typeof profile.regions.secondGroveUnlocked !== "boolean"
+      || typeof profile.regions.trees05To07Revealed !== "boolean"
+      || typeof profile.regions.ceremonySeen !== "boolean") return false;
+    const regionLatchMismatch = profile.regions.secondGroveUnlocked !== profile.regions.trees05To07Revealed;
+    if (regionLatchMismatch) {
+      const repairableStoredVictory = allowVictoryLatchRepair
+        && profile.games.prismbind?.victories > 0
+        && !profile.regions.ceremonySeen;
+      if (!repairableStoredVictory) return false;
+    }
+    if (!profile.regions.secondGroveUnlocked && profile.regions.ceremonySeen) return false;
+    return true;
+  }
+
+  function isCanonicalProfileV4(profile, allowVictoryLatchRepair = false) {
+    if (!hasCanonicalProfileShell(profile, LEGACY_PROFILE_VERSION, LEGACY_GAME_IDS, allowVictoryLatchRepair)) return false;
+    const prismVictoryRecorded = profile.games.prismbind.victories > 0;
+    const crownheartLatched = profile.regions.secondGroveUnlocked && profile.regions.trees05To07Revealed;
+    if (!prismVictoryRecorded) return !profile.regions.secondGroveUnlocked && !profile.regions.trees05To07Revealed;
+    if (!crownheartLatched) {
+      return allowVictoryLatchRepair && !profile.regions.ceremonySeen;
+    }
+    return true;
+  }
+
+  function migrateCanonicalV4(profile) {
+    const migrated = makeDefaultProfile();
+    migrated.introSeen = profile.introSeen;
+    for (const gameId of LEGACY_GAME_IDS) migrated.games[gameId] = { ...profile.games[gameId] };
+    migrated.trialBest = profile.trialBest;
+    migrated.trialsCompleted = profile.trialsCompleted;
+    migrated.legacyTrialBest = profile.legacyTrialBest;
+    migrated.legacyTrialsCompleted = profile.legacyTrialsCompleted;
+    migrated.unlocks = { ...profile.unlocks };
+    migrated.regions = { ...profile.regions };
+    if (migrated.games.prismbind.victories > 0) {
+      migrated.regions.secondGroveUnlocked = true;
+      migrated.regions.trees05To07Revealed = true;
+    }
+    migrated.updatedAt = profile.updatedAt;
+    return migrated;
+  }
+
   function migrateProfile(rawProfile, standaloneBests = {}) {
     const warnings = [];
     const rawIsObject = isPlainObject(rawProfile);
     const rawVersion = rawIsObject ? rawProfile.version : null;
 
-    if (typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > PROFILE_VERSION) {
+    if (typeof rawVersion === "number" && rawVersion > PROFILE_VERSION) {
       return failed("future-profile", { sourceVersion: rawVersion, profile: null, warnings: Object.freeze([]) });
     }
 
@@ -206,6 +313,34 @@
       ? rawVersion
       : null;
     if (sourceVersion === null && rawProfile !== null && rawProfile !== undefined) warnings.push("malformed-profile");
+
+    if (sourceVersion === PROFILE_VERSION) {
+      if (!isCanonicalProfile(rawProfile)) {
+        return failed("invalid-profile-v5", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        sourceVersion,
+        migrated: false,
+        warnings: Object.freeze([]),
+        profile: deepFreeze(cloneCanonicalProfile(rawProfile))
+      });
+    }
+
+    if (sourceVersion === LEGACY_PROFILE_VERSION) {
+      if (!isCanonicalProfileV4(rawProfile, true)) {
+        return failed("invalid-profile-v4", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        sourceVersion,
+        migrated: true,
+        warnings: Object.freeze([]),
+        profile: deepFreeze(migrateCanonicalV4(rawProfile))
+      });
+    }
 
     const source = sourceVersion === null ? {} : rawProfile;
     const sourceGames = isPlainObject(source.games) ? source.games : {};
@@ -215,12 +350,14 @@
     for (const gameId of ALL_GAME_IDS) {
       const definition = GAME_DEFINITIONS[gameId];
       const incoming = isPlainObject(sourceGames[gameId]) ? sourceGames[gameId] : {};
-      const standaloneBest = standaloneBestFor(standaloneBests, gameId);
-      const historicalBest = sourceVersion !== null && sourceVersion < PROFILE_VERSION
+      // Standalone Mothchorus history is deliberately outside Grove progress.
+      // Trees 01-04 retain their established legacy-import behavior for v1-v3.
+      const standaloneBest = gameId === "mothchorus" ? 0 : standaloneBestFor(standaloneBests, gameId);
+      const historicalBest = sourceVersion !== null && sourceVersion <= 3
         ? sanitizeStoredCounter(incoming.best)
         : sanitizeStoredCounter(incoming.standardBest);
       const standardBest = Math.max(historicalBest, standaloneBest);
-      const assistedBest = sourceVersion === PROFILE_VERSION ? sanitizeStoredCounter(incoming.assistedBest) : 0;
+      const assistedBest = 0;
       const record = profile.games[gameId];
 
       record.standardBest = standardBest;
@@ -237,10 +374,7 @@
       record.completed = strictBoolean(incoming.completed) || record.totalScore > 0 || record.victories > 0;
       record.lastRank = safeText(incoming.lastRank, "SEED", 48) || "SEED";
 
-      if (sourceVersion === PROFILE_VERSION && definition.foundational) {
-        record.masterySeed = strictBoolean(incoming.masterySeed);
-        record.seedCeremonySeen = record.masterySeed && strictBoolean(incoming.seedCeremonySeen);
-      } else if (sourceVersion !== PROFILE_VERSION && definition.foundational && standardBest >= definition.seedThreshold) {
+      if (definition.foundational && standardBest >= definition.seedThreshold) {
         // Historical profiles cannot prove victory/assist state. D-020 grandfathers
         // qualifying recorded bests and suppresses three retroactive Seed popups.
         record.masterySeed = true;
@@ -265,25 +399,14 @@
       profile.legacyTrialsCompleted = oldLegacyCompleted;
     }
 
-    const sourceUnlocks = isPlainObject(source.unlocks) ? source.unlocks : {};
     const allFoundationalSeeds = FOUNDATIONAL_GAME_IDS.every((gameId) => profile.games[gameId].masterySeed);
-    const storedPrismbindUnlock = sourceVersion === PROFILE_VERSION && strictBoolean(sourceUnlocks.prismbind);
-    const inferredPrismbindUnlock = allFoundationalSeeds && !storedPrismbindUnlock;
-    profile.unlocks.prismbind = storedPrismbindUnlock || allFoundationalSeeds;
-    profile.unlocks.prismbindCeremonySeen = profile.unlocks.prismbind
-      && !inferredPrismbindUnlock
-      && sourceVersion === PROFILE_VERSION
-      && strictBoolean(sourceUnlocks.prismbindCeremonySeen);
+    profile.unlocks.prismbind = allFoundationalSeeds;
+    profile.unlocks.prismbindCeremonySeen = false;
 
-    const sourceRegions = isPlainObject(source.regions) ? source.regions : {};
     const prismVictoryRecorded = profile.games.prismbind.victories > 0;
-    const storedSecondGrove = sourceVersion === PROFILE_VERSION && strictBoolean(sourceRegions.secondGroveUnlocked);
-    const storedTrees = sourceVersion === PROFILE_VERSION && strictBoolean(sourceRegions.trees05To07Revealed);
-    profile.regions.secondGroveUnlocked = storedSecondGrove || storedTrees || prismVictoryRecorded;
-    profile.regions.trees05To07Revealed = storedTrees || prismVictoryRecorded;
-    profile.regions.ceremonySeen = (profile.regions.secondGroveUnlocked || profile.regions.trees05To07Revealed)
-      && sourceVersion === PROFILE_VERSION
-      && strictBoolean(sourceRegions.ceremonySeen);
+    profile.regions.secondGroveUnlocked = prismVictoryRecorded;
+    profile.regions.trees05To07Revealed = prismVictoryRecorded;
+    profile.regions.ceremonySeen = false;
 
     profile.updatedAt = source.updatedAt === null
       ? null
@@ -300,37 +423,33 @@
   }
 
   function isCanonicalProfile(profile) {
-    if (!hasExactKeys(profile, PROFILE_KEYS) || profile.version !== PROFILE_VERSION) return false;
-    if (typeof profile.introSeen !== "boolean") return false;
-    if (!hasExactKeys(profile.games, ALL_GAME_IDS)) return false;
-    if (![profile.trialBest, profile.trialsCompleted, profile.legacyTrialBest, profile.legacyTrialsCompleted].every(isCounter)) return false;
-    if (!(profile.updatedAt === null || (typeof profile.updatedAt === "string" && profile.updatedAt.length <= 64))) return false;
+    if (!hasCanonicalProfileShell(profile, PROFILE_VERSION, ALL_GAME_IDS)) return false;
+    const prismVictoryRecorded = profile.games.prismbind.victories > 0;
+    if (profile.regions.secondGroveUnlocked !== prismVictoryRecorded
+      || profile.regions.trees05To07Revealed !== prismVictoryRecorded) return false;
 
-    for (const gameId of ALL_GAME_IDS) {
-      const record = profile.games[gameId];
-      if (!hasExactKeys(record, GAME_RECORD_KEYS)) return false;
-      if (![record.totalScore, record.standardBest, record.assistedBest, record.plays, record.victories, record.lastScore].every(isCounter)) return false;
-      if (record.totalScore < record.standardBest || record.totalScore < record.assistedBest || record.totalScore < record.lastScore) return false;
-      if (typeof record.completed !== "boolean" || typeof record.masterySeed !== "boolean" || typeof record.seedCeremonySeen !== "boolean") return false;
-      if (typeof record.lastRank !== "string" || !record.lastRank || record.lastRank.length > 48) return false;
-      if (!GAME_DEFINITIONS[gameId].foundational && record.masterySeed) return false;
-      if (!record.masterySeed && record.seedCeremonySeen) return false;
-      if ((record.victories > 0 || record.masterySeed) && !record.completed) return false;
-    }
-
-    if (!hasExactKeys(profile.unlocks, UNLOCK_KEYS)) return false;
-    if (typeof profile.unlocks.prismbind !== "boolean" || typeof profile.unlocks.prismbindCeremonySeen !== "boolean") return false;
-    if (!profile.unlocks.prismbind && profile.unlocks.prismbindCeremonySeen) return false;
-    if (FOUNDATIONAL_GAME_IDS.every((gameId) => profile.games[gameId].masterySeed) && !profile.unlocks.prismbind) return false;
-
-    if (!hasExactKeys(profile.regions, REGION_KEYS)) return false;
-    if (typeof profile.regions.secondGroveUnlocked !== "boolean"
-      || typeof profile.regions.trees05To07Revealed !== "boolean"
-      || typeof profile.regions.ceremonySeen !== "boolean") return false;
-    if (profile.regions.trees05To07Revealed && !profile.regions.secondGroveUnlocked) return false;
-    if (!profile.regions.secondGroveUnlocked && profile.regions.ceremonySeen) return false;
-    if (profile.games.prismbind.victories > 0
-      && (!profile.regions.secondGroveUnlocked || !profile.regions.trees05To07Revealed)) return false;
+    const moth = profile.games.mothchorus;
+    const hasMothProgress = moth.totalScore > 0
+      || moth.standardBest > 0
+      || moth.assistedBest > 0
+      || moth.plays > 0
+      || moth.completed
+      || moth.victories > 0
+      || moth.lastScore > 0
+      || moth.masterySeed
+      || moth.seedCeremonySeen;
+    if (hasMothProgress && !profile.regions.secondGroveUnlocked) return false;
+    if (moth.assistedBest !== 0) return false;
+    if (moth.standardBest > 10000 || moth.lastScore > 10000) return false;
+    if (moth.plays !== moth.victories) return false;
+    const maximumMothTotal = moth.plays > Math.floor(MAX_COUNTER / 10000)
+      ? MAX_COUNTER
+      : moth.plays * 10000;
+    if (moth.totalScore > maximumMothTotal) return false;
+    if (moth.completed !== (moth.plays > 0)) return false;
+    if (moth.completed && moth.lastRank !== canonicalMothchorusRank(moth.lastScore)) return false;
+    if (!moth.completed && moth.lastRank !== "SEED") return false;
+    if (moth.masterySeed && moth.standardBest < GAME_DEFINITIONS.mothchorus.seedThreshold) return false;
     return true;
   }
 
@@ -377,14 +496,45 @@
 
   function isGameUnlocked(profile, gameId) {
     if (!isCanonicalProfile(profile) || !ALL_GAME_IDS.includes(gameId)) return false;
-    return gameId !== "prismbind" || profile.unlocks.prismbind;
+    if (gameId === "prismbind") return profile.unlocks.prismbind;
+    if (gameId === "mothchorus") return profile.regions.secondGroveUnlocked;
+    return true;
   }
 
   function validateRunResult(result) {
     if (!isPlainObject(result) || !ALL_GAME_IDS.includes(result.gameId)) return failed("invalid-game-result");
+    if (result.gameId === "mothchorus" && !hasExactKeys(result, [
+      "gameId", "score", "best", "victory", "assisted", "rank", "finalVoiceCount", "participantMode"
+    ])) return failed("invalid-game-result");
     if (!isCounter(result.score)) return failed("invalid-score");
     if (typeof result.victory !== "boolean") return failed("invalid-victory");
     if (typeof result.assisted !== "boolean") return failed("invalid-assisted");
+
+    if (result.gameId === "mothchorus") {
+      if (result.score > 10000) return failed("invalid-score");
+      if (!isCounter(result.best) || result.best < result.score || result.best > 10000) return failed("invalid-best");
+      if (result.victory !== true) return failed("invalid-victory");
+      if (result.assisted !== false) return failed("invalid-assisted");
+      const canonicalRank = canonicalMothchorusRank(result.score);
+      if (result.rank !== canonicalRank) return failed("invalid-rank");
+      if (!isCounter(result.finalVoiceCount) || result.finalVoiceCount > 24) return failed("invalid-voice-count");
+      if (result.participantMode !== "solo" && result.participantMode !== "together") return failed("invalid-participant-mode");
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        result: deepFreeze({
+          gameId: result.gameId,
+          score: result.score,
+          best: result.best,
+          victory: true,
+          assisted: false,
+          rank: canonicalRank,
+          finalVoiceCount: result.finalVoiceCount,
+          participantMode: result.participantMode
+        })
+      });
+    }
+
     if (result.rank !== undefined && (typeof result.rank !== "string" || !result.rank || result.rank.length > 48)) {
       return failed("invalid-rank");
     }
@@ -404,8 +554,8 @@
 
   function seedEligibilityCanonical(profile, result) {
     const definition = GAME_DEFINITIONS[result.gameId];
-    if (!definition.foundational) {
-      return deepFreeze({ eligible: false, reason: "not-foundational", gameId: result.gameId, threshold: null, requiresVictory: false });
+    if (!definition.seedEligible) {
+      return deepFreeze({ eligible: false, reason: "not-seed-eligible", gameId: result.gameId, threshold: null, requiresVictory: false });
     }
     if (profile.games[result.gameId].masterySeed) {
       return deepFreeze({ eligible: false, reason: "already-earned", gameId: result.gameId, threshold: definition.seedThreshold, requiresVictory: definition.seedRequiresVictory });
@@ -416,7 +566,24 @@
     if (definition.seedRequiresVictory && !result.victory) {
       return deepFreeze({ eligible: false, reason: "victory-required", gameId: result.gameId, threshold: definition.seedThreshold, requiresVictory: true });
     }
-    return deepFreeze({ eligible: true, reason: "eligible", gameId: result.gameId, threshold: definition.seedThreshold, requiresVictory: definition.seedRequiresVictory });
+    if (result.gameId === "mothchorus" && result.finalVoiceCount < definition.seedVoiceThreshold) {
+      return deepFreeze({
+        eligible: false,
+        reason: "voices-required",
+        gameId: result.gameId,
+        threshold: definition.seedThreshold,
+        voiceThreshold: definition.seedVoiceThreshold,
+        requiresVictory: true
+      });
+    }
+    return deepFreeze({
+      eligible: true,
+      reason: "eligible",
+      gameId: result.gameId,
+      threshold: definition.seedThreshold,
+      voiceThreshold: definition.seedVoiceThreshold || null,
+      requiresVictory: definition.seedRequiresVictory
+    });
   }
 
   function seedEligibility(profile, rawResult) {
@@ -498,6 +665,22 @@
       });
     }
 
+    if (gameId === "mothchorus" && !profile.regions.secondGroveUnlocked) {
+      return rewardDescriptor({
+        gameId,
+        kind: "tree-unlock",
+        metric: "guardian-victory",
+        current: 0,
+        target: 1,
+        remaining: 1,
+        nextStage: "CHOIR LINDEN",
+        requiresVictory: true,
+        growthLabel: "TREE SLEEPING",
+        skillLabel: "DEFEAT PRISMBIND AND AWAKEN THE CROWNHEART",
+        ...growthFields
+      });
+    }
+
     if (gameId === "prismbind" && !profile.regions.secondGroveUnlocked) {
       const skillLabel = "DEFEAT THE GUARDIAN TO REVEAL THE NEXT CLEARING";
       return rewardDescriptor({
@@ -515,10 +698,12 @@
       });
     }
 
-    if (definition.foundational && !record.masterySeed) {
+    if (definition.seedEligible && !record.masterySeed) {
       const currentBest = Math.max(record.standardBest, record.assistedBest);
       const remaining = Math.max(0, definition.seedThreshold - currentBest);
-      const skillLabel = definition.seedRequiresVictory
+      const skillLabel = gameId === "mothchorus"
+        ? `SCORE ${formatCounter(definition.seedThreshold)} + RETURN ${definition.seedVoiceThreshold} VOICES IN ONE CHORUS`
+        : definition.seedRequiresVictory
         ? remaining > 0
           ? `${formatCounter(remaining)} BEST-RUN ${remaining === 1 ? "POINT" : "POINTS"} TO SEED · VICTORY REQUIRED`
           : `WIN WITH ${formatCounter(definition.seedThreshold)} OR MORE TO EARN THE SEED`
@@ -534,6 +719,7 @@
         remaining,
         nextStage: "MASTERY SEED",
         requiresVictory: definition.seedRequiresVictory,
+        voiceTarget: definition.seedVoiceThreshold || null,
         growthLabel,
         skillLabel,
         ...growthFields
@@ -582,12 +768,14 @@
   }
 
   function seedReward(gameId) {
-    return deepFreeze({
+    const reward = {
       type: "mastery-seed",
       ceremonyKey: `seed:${gameId}`,
       gameId,
       threshold: GAME_DEFINITIONS[gameId].seedThreshold
-    });
+    };
+    if (gameId === "mothchorus") reward.voiceThreshold = GAME_DEFINITIONS.mothchorus.seedVoiceThreshold;
+    return deepFreeze(reward);
   }
 
   function prismbindUnlockReward() {
@@ -669,7 +857,7 @@
   function pendingRewards(profile) {
     if (!isCanonicalProfile(profile)) return Object.freeze([]);
     const rewards = [];
-    for (const gameId of FOUNDATIONAL_GAME_IDS) {
+    for (const gameId of SEED_ELIGIBLE_GAME_IDS) {
       const record = profile.games[gameId];
       if (record.masterySeed && !record.seedCeremonySeen) rewards.push(seedReward(gameId));
     }
@@ -687,7 +875,7 @@
     let recognized = false;
     if (ceremonyKey.startsWith("seed:")) {
       const gameId = ceremonyKey.slice(5);
-      if (FOUNDATIONAL_GAME_IDS.includes(gameId) && next.games[gameId].masterySeed) {
+      if (SEED_ELIGIBLE_GAME_IDS.includes(gameId) && next.games[gameId].masterySeed) {
         next.games[gameId].seedCeremonySeen = true;
         recognized = true;
       }
@@ -737,9 +925,14 @@
       && /^[A-Za-z0-9._:-]+$/.test(value);
   }
 
-  function createSession(gameId, sessionId) {
+  function createSession(gameId, sessionId, profile = undefined) {
     if (!ALL_GAME_IDS.includes(gameId)) return failed("invalid-game-id");
     if (!isToken(sessionId, 8)) return failed("invalid-session-id");
+    if (gameId === "mothchorus") {
+      if (profile === undefined) return failed("profile-required");
+      if (!isCanonicalProfile(profile)) return failed("invalid-profile");
+      if (!isGameUnlocked(profile, gameId)) return failed("game-locked");
+    }
     return deepFreeze({
       ok: true,
       code: "ok",
@@ -771,6 +964,19 @@
     if (message.gameId !== session.gameId) return failed("game-mismatch");
     if (message.sessionId !== session.sessionId) return failed("session-mismatch");
     if (!["game-ready", "run-start", "run-complete", "run-abandon"].includes(message.type)) return failed("invalid-message-type");
+    if (message.gameId === "mothchorus" && message.type !== "game-ready" && message.runId === undefined) {
+      return failed("run-id-required");
+    }
+
+    if (message.gameId === "mothchorus") {
+      const baseKeys = ["source", "version", "type", "gameId", "sessionId"];
+      const expectedKeys = message.type === "game-ready"
+        ? baseKeys
+        : message.type === "run-start" || message.type === "run-abandon"
+          ? [...baseKeys, "runId"]
+          : [...baseKeys, "runId", "score", "best", "victory", "rank", "finalVoiceCount", "participantMode", "assist"];
+      if (!hasExactKeys(message, expectedKeys)) return failed("invalid-message");
+    }
 
     if (message.type === "game-ready") {
       return deepFreeze({ ok: true, code: "ok", message: deepFreeze({ type: "game-ready", gameId: message.gameId, sessionId: message.sessionId }) });
@@ -785,10 +991,15 @@
       });
     }
 
+    const exactMothAssist = message.gameId === "mothchorus"
+      && hasExactKeys(message.assist, ["preset", "scoreChanging"])
+      && message.assist.preset === "standard"
+      && message.assist.scoreChanging === false;
     const assistPreset = isPlainObject(message.assist) && typeof message.assist.preset === "string"
       ? message.assist.preset.trim().toLowerCase()
       : "";
-    if (!isPlainObject(message.assist)
+    if ((message.gameId === "mothchorus" && !exactMothAssist)
+      || !isPlainObject(message.assist)
       || typeof message.assist.preset !== "string"
       || !assistPreset
       || message.assist.preset.length > 32
@@ -804,7 +1015,9 @@
       best: message.best,
       victory: message.victory,
       assisted: message.assist.scoreChanging,
-      rank: message.rank
+      rank: message.rank,
+      finalVoiceCount: message.finalVoiceCount,
+      participantMode: message.participantMode
     });
     if (!validatedResult.ok) return validatedResult;
     return deepFreeze({
@@ -903,12 +1116,30 @@
     }
     if (bundle.kind !== EXPORT_KIND) return failed("invalid-export-kind");
     if (bundle.bundleVersion !== EXPORT_VERSION) return failed("unsupported-export-version");
-    if (bundle.profileVersion !== PROFILE_VERSION) return failed("unsupported-profile-version");
+    if (bundle.profileVersion !== PROFILE_VERSION && bundle.profileVersion !== LEGACY_PROFILE_VERSION) {
+      return failed("unsupported-profile-version");
+    }
     if (!(bundle.exportedAt === null || (typeof bundle.exportedAt === "string" && bundle.exportedAt.length <= 64))) {
       return failed("invalid-export-time");
     }
+    if (bundle.profileVersion === LEGACY_PROFILE_VERSION) {
+      if (!isCanonicalProfileV4(bundle.profile, false)) return failed("invalid-export-profile");
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        sourceProfileVersion: LEGACY_PROFILE_VERSION,
+        migrated: true,
+        profile: deepFreeze(migrateCanonicalV4(bundle.profile))
+      });
+    }
     if (!isCanonicalProfile(bundle.profile)) return failed("invalid-export-profile");
-    return deepFreeze({ ok: true, code: "ok", profile: deepFreeze(cloneCanonicalProfile(bundle.profile)) });
+    return deepFreeze({
+      ok: true,
+      code: "ok",
+      sourceProfileVersion: PROFILE_VERSION,
+      migrated: false,
+      profile: deepFreeze(cloneCanonicalProfile(bundle.profile))
+    });
   }
 
   return Object.freeze({
@@ -917,10 +1148,13 @@
     EXPORT_KIND,
     EXPORT_VERSION,
     MAX_COUNTER,
+    FIRST_TREE_PART_COUNT,
     FOUNDATIONAL_GAME_IDS,
+    SEED_ELIGIBLE_GAME_IDS,
     ALL_GAME_IDS,
     GROWTH_STAGES,
     GAME_DEFINITIONS,
+    MOTHCHORUS_RANKS,
     GROVE_RANKS,
     defaultProfile,
     migrateProfile,
@@ -929,6 +1163,7 @@
     foundationalMarks,
     groveRankForMarks,
     isGameUnlocked,
+    canonicalMothchorusRank,
     validateRunResult,
     seedEligibility,
     classifyRunFeedback,
