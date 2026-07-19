@@ -8,11 +8,36 @@
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let reducedMotion = motionQuery.matches;
   const pageParams = new URLSearchParams(window.location.search);
-  const isTrialRun = pageParams.get('trial') === '1';
-  const sessionId = pageParams.get('session') || '';
-  const messageTargetOrigin = window.location.protocol === 'file:' ? '*' : window.location.origin;
+  const modeRules = window.LumenloomModes;
+  if (!modeRules || typeof modeRules.getMode !== 'function') {
+    throw new Error('Lumenloom mode rules must load before the game runtime.');
+  }
+  const groveBridge = window.LumenloomGroveProtocolV2;
+  if (!groveBridge || typeof groveBridge.parseContext !== 'function') {
+    throw new Error('Lumenloom Grove protocol bridge must load before the game runtime.');
+  }
   const isEmbedded = window.parent !== window;
-  const isGroveHosted = isEmbedded && pageParams.get('grove') === '1';
+  const groveContext = groveBridge.parseContext(window.location.search, isEmbedded);
+  if (groveContext.kind === 'invalid') {
+    throw new Error('Lumenloom refused an invalid embedded Grove context.');
+  }
+  const isGroveHosted = groveContext.hosted;
+  // D-029 keeps the gameplay lifecycle in state.mode. Arcade selection is a
+  // separate immutable value so title/playing/paused/result transitions never
+  // become entangled with Standard/Quick/Wild/Crown mode identity.
+  const selectedModeId = isGroveHosted ? groveContext.modeId : 'standard';
+  const selectedMode = modeRules.getMode(selectedModeId);
+  if (!selectedMode) throw new Error('The canonical Lumenloom mode is unavailable.');
+  const isPetalRush = selectedModeId === 'petalRush';
+  // The first Quick Bloom is live. Later remixes remain fail-closed until their
+  // own runtime and proof paths are release-gated.
+  if (!['standard', 'petalRush'].includes(selectedModeId)) {
+    throw new Error('This Lumenloom arcade mode is not enabled in the current runtime.');
+  }
+  const isTrialRun = isGroveHosted && groveContext.trial;
+  const sessionId = isGroveHosted ? groveContext.sessionId : '';
+  const messageTargetOrigin = window.location.protocol === 'file:' ? '*' : window.location.origin;
+  let groveClient = groveBridge.createClient(groveContext);
 
   const ui = {
     app: $('app'),
@@ -47,6 +72,7 @@
     playButton: $('playButton'),
     pauseOverlay: $('pauseOverlay'),
     resumeButton: $('resumeButton'),
+    pauseRestartButton: $('pauseRestartButton'),
     quitButton: $('quitButton'),
     blessingOverlay: $('blessingOverlay'),
     blessingChoices: $('blessingChoices'),
@@ -57,6 +83,7 @@
     resultCopy: $('resultCopy'),
     resultRank: $('resultRank'),
     resultScore: $('resultScore'),
+    resultBestLabel: $('resultBestLabel'),
     resultBest: $('resultBest'),
     resultLoops: $('resultLoops'),
     resultShadows: $('resultShadows'),
@@ -72,6 +99,7 @@
     ui.fullscreenButton.hidden = true;
     ui.fullscreenButton.disabled = true;
   }
+  document.documentElement.dataset.lumenMode = selectedModeId;
 
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -112,8 +140,10 @@
   });
   const FRAY_BALANCE = Object.freeze({
     canon: 'D-027',
-    baseWindow: 2.5,
-    goldenFiberBonus: 0.4
+    baseWindow: selectedMode.frayWindowMs / 1000,
+    goldenFiberBonus: selectedModeId === 'standard'
+      ? (selectedMode.goldenFiberFrayWindowMs - selectedMode.frayWindowMs) / 1000
+      : 0
   });
 
   function hash01(value) {
@@ -359,6 +389,14 @@
     }
   ];
 
+  const standardPhaseTargets = phaseDefs.map((phase) => phase.target);
+  const standardFlowerCounts = phaseDefs.map((phase) => phase.anchorCount);
+  if (selectedModeId === 'standard'
+    && (JSON.stringify(standardPhaseTargets) !== JSON.stringify(selectedMode.phaseTargets)
+      || JSON.stringify(standardFlowerCounts) !== JSON.stringify(selectedMode.flowerCounts))) {
+    throw new Error('Lumenloom Standard phase definitions drifted from the shared mode canon.');
+  }
+
   const blessingDefs = [
     { id: 'longer', symbol: '∞', name: 'Longer Thread', copy: '+25 maximum lumen. Brave shapes can stretch farther.' },
     { id: 'golden', symbol: '⌛', name: 'Golden Fiber', copy: `Fraying thread holds ${FRAY_BALANCE.goldenFiberBonus.toFixed(1)} seconds longer before it breaks.` },
@@ -373,7 +411,7 @@
       speed: 1,
       frayWindow: FRAY_BALANCE.baseWindow,
       captureRefund: 16,
-      chainWindow: 6,
+      chainWindow: (selectedMode.loop?.chainWindowMs || 6000) / 1000,
       ward: false
     };
   }
@@ -394,9 +432,9 @@
     toastTimer: 0,
     score: 0,
     best: readBest(),
-    lives: 3,
-    lumen: 100,
-    maxLumen: 100,
+    lives: selectedMode.startPetals,
+    lumen: selectedMode.startLumen,
+    maxLumen: selectedMode.startLumen,
     frayTimer: 0,
     frayMax: 0,
     weaveAge: 0,
@@ -413,6 +451,7 @@
     grass: [],
     stones: [],
     lastLoopAt: -999,
+    lastArcadeLoopAtMs: -1,
     comboStack: 0,
     cleanWeave: true,
     invalidFlash: 0,
@@ -420,6 +459,12 @@
     runTime: 0,
     loops: 0,
     shadows: 0,
+    totalVertices: 0,
+    cleanLoops: 0,
+    chainLinks: 0,
+    arcadeClockMs: 0,
+    arcadeElapsedMs: 0,
+    arcadeReplacementQueue: [],
     shake: 0,
     flash: 0,
     dawn: 0,
@@ -583,16 +628,69 @@
     catch (_) { /* Vibration is an optional, capability-gated enhancement. */ }
   }
 
-  function postToGrove(type, payload = {}) {
-    if (!isEmbedded) return;
-    window.parent.postMessage({
-      source: 'first-bloom-game',
-      version: 1,
-      type,
-      gameId: 'lumenloom',
-      ...payload,
-      sessionId
-    }, messageTargetOrigin);
+  function sendGroveMessage(message) {
+    if (!isGroveHosted || !message) return false;
+    window.parent.postMessage(message, messageTargetOrigin);
+    return true;
+  }
+
+  function transitionGroveClient(action) {
+    const next = groveBridge.reduceClient(groveClient, action);
+    groveClient = next;
+    return next;
+  }
+
+  function publishGroveReady() {
+    const message = groveBridge.buildGameReady(groveClient);
+    if (!sendGroveMessage(message)) return false;
+    transitionGroveClient({ type: groveBridge.CLIENT_ACTIONS.READY_SENT });
+    return true;
+  }
+
+  function requestGroveStart() {
+    if (!isGroveHosted || groveClient.phase !== 'ready') return false;
+    const runId = groveBridge.createRunId({ scope: sessionId });
+    transitionGroveClient({
+      type: groveBridge.CLIENT_ACTIONS.START_REQUESTED,
+      runId
+    });
+    const message = groveBridge.buildRunStart(groveClient);
+    if (!sendGroveMessage(message)) return false;
+    ui.playButton.disabled = true;
+    ui.playButton.querySelector('span:last-of-type')?.replaceChildren('PREPARING THE GARDEN…');
+    return true;
+  }
+
+  function requestGroveSessionAction(action) {
+    if (!isGroveHosted || !groveBridge.canRequestSessionAction(groveClient, action)) return false;
+    transitionGroveClient({
+      type: groveBridge.CLIENT_ACTIONS.SESSION_ACTION_REQUESTED,
+      action
+    });
+    const message = groveBridge.buildSessionAction(groveClient);
+    if (!sendGroveMessage(message)) return false;
+    ui.replayButton.disabled = true;
+    ui.homeButton.disabled = true;
+    ui.quitButton.disabled = true;
+    ui.pauseRestartButton.disabled = true;
+    return true;
+  }
+
+  function publishGroveRunComplete(payload) {
+    if (!isGroveHosted || groveClient.phase !== 'running') return false;
+    const message = groveBridge.buildRunComplete(groveClient, payload);
+    if (!message) return false;
+    transitionGroveClient({
+      type: groveBridge.CLIENT_ACTIONS.RUN_FINISHED,
+      score: payload.score,
+      victory: payload.victory
+    });
+    return sendGroveMessage(message);
+  }
+
+  function publishGroveAbandon() {
+    if (!isGroveHosted || groveClient.phase !== 'running') return false;
+    return sendGroveMessage(groveBridge.buildRunAbandon(groveClient));
   }
 
   const dialogOverlays = [ui.startOverlay, ui.pauseOverlay, ui.blessingOverlay, ui.resultOverlay];
@@ -665,11 +763,13 @@
   }
 
   function readBest() {
+    if (isGroveHosted) return 0;
     try { return Number(localStorage.getItem('lumenloom-best') || 0); }
     catch (_) { return 0; }
   }
 
   function writeBest(value) {
+    if (isGroveHosted) return;
     try { localStorage.setItem('lumenloom-best', String(Math.round(value))); }
     catch (_) { /* local file privacy modes may disable storage */ }
   }
@@ -760,7 +860,7 @@
     const side = Math.max(58, W * 0.055);
     const top = Math.max(150, H * 0.18);
     const bottomInset = Math.max(95, H * 0.13);
-    return {
+    const bounds = {
       left: Math.max(playBounds.left, side),
       right: Math.min(playBounds.right, W - side),
       top: Math.max(playBounds.top, top),
@@ -769,6 +869,16 @@
       height: Math.min(playBounds.bottom, H - bottomInset) - Math.max(playBounds.top, top),
       centerX: W / 2,
       centerY: (Math.max(playBounds.top, top) + Math.min(playBounds.bottom, H - bottomInset)) / 2
+    };
+    if (!isPetalRush) return bounds;
+
+    const compactWidth = Math.min(bounds.width, Math.max(620, W * 0.64));
+    const left = bounds.centerX - compactWidth / 2;
+    return {
+      ...bounds,
+      left,
+      right: left + compactWidth,
+      width: compactWidth
     };
   }
 
@@ -894,20 +1004,27 @@
 
   function startRun() {
     if (isTrialRun && state.mode === 'result') return;
+    if (isGroveHosted) {
+      requestGroveStart();
+      return;
+    }
+    beginRun();
+  }
+
+  function beginRun() {
     audio.init();
     resetMobileStick();
     seedRunRandom((Date.now() ^ Math.round(performance.now() * 1000)) >>> 0);
     state.mode = 'playing';
-    postToGrove('run-start');
     state.previousMode = 'playing';
     state.phaseIndex = 0;
     state.phaseProgress = 0;
     state.phaseTarget = 1;
     state.phaseTime = Infinity;
     state.score = 0;
-    state.lives = 3;
-    state.maxLumen = 100;
-    state.lumen = 100;
+    state.lives = selectedMode.startPetals;
+    state.maxLumen = selectedMode.startLumen;
+    state.lumen = selectedMode.startLumen;
     state.chain = [];
     state.anchors = [];
     state.enemies = [];
@@ -920,9 +1037,16 @@
     state.frayTimer = 0;
     state.comboStack = 0;
     state.lastLoopAt = -999;
+    state.lastArcadeLoopAtMs = -1;
     state.runTime = 0;
     state.loops = 0;
     state.shadows = 0;
+    state.totalVertices = 0;
+    state.cleanLoops = 0;
+    state.chainLinks = 0;
+    state.arcadeClockMs = 0;
+    state.arcadeElapsedMs = 0;
+    state.arcadeReplacementQueue = [];
     state.shake = 0;
     state.flash = 0;
     state.dawn = 0;
@@ -931,8 +1055,40 @@
     state.upgrades = createDefaultUpgrades();
     state.player = { x: playBounds.centerX, y: playBounds.centerY, vx: 0, vy: 0, facing: -Math.PI / 2, invulnerable: 1.1, wing: 0 };
     ui.hud.classList.remove('is-hidden');
+    ui.playButton.disabled = false;
+    ui.replayButton.disabled = false;
+    ui.homeButton.disabled = false;
+    ui.quitButton.disabled = false;
+    ui.pauseRestartButton.disabled = isTrialRun;
     closeDialogs(canvas);
-    beginPhase(0);
+    if (isPetalRush) beginPetalRush();
+    else beginPhase(0);
+  }
+
+  function beginPetalRush() {
+    state.phaseIndex = 1;
+    state.phaseProgress = 0;
+    state.phaseTarget = selectedMode.durationMs;
+    state.phaseTime = selectedMode.durationMs / 1000;
+    state.anchors = generateAnchors(selectedMode.flowerCount, false);
+    replenishPetalRushFlowers([]);
+    state.enemies = [];
+    state.chain = [];
+    state.frayTimer = 0;
+    state.weaveAge = 0;
+    state.player.x = playBounds.centerX;
+    state.player.y = playBounds.centerY;
+    state.player.vx = 0;
+    state.player.vy = 0;
+    state.player.invulnerable = 1.35;
+    state.lumen = state.maxLumen;
+    state.mode = 'playing';
+    ui.phaseBanner.classList.remove('is-visible');
+    state.phaseIntroTimer = 0;
+    maintainPetalRushThreatFloor(true);
+    showToast('Close bright loops. Keep one petal for 90 seconds.', false, 2.6);
+    updateObjective();
+    updateHud();
   }
 
   function beginPhase(index) {
@@ -1019,7 +1175,7 @@
     };
   }
 
-  function spawnEnemy(type, initial = false) {
+  function spawnEnemy(type, initial = false, rosterSlot = null) {
     const data = {
       drifter: { radius: 17, speed: 45 + random() * 18 },
       seeker: { radius: 19, speed: 58 + random() * 14 },
@@ -1064,7 +1220,8 @@
       chargeY: 0,
       hp: type === 'boss' ? 3 : 1,
       invulnerable: 0,
-      dead: false
+      dead: false,
+      rosterSlot
     });
   }
 
@@ -1074,6 +1231,50 @@
     if (phase >= 3 && roll < 0.2) return 'rusher';
     if (phase >= 2 && roll < (phase === 2 ? 0.32 : 0.46)) return 'seeker';
     return 'drifter';
+  }
+
+  const PETAL_THREAT_TYPES = Object.freeze(['drifter', 'seeker', 'rusher']);
+
+  function petalRushThreatMinimum(elapsedMs = state.arcadeElapsedMs) {
+    let minimum = selectedMode.threat.stages[0].minimum;
+    for (const stage of selectedMode.threat.stages) {
+      if (elapsedMs < stage.atMs) break;
+      minimum = stage.minimum;
+    }
+    return minimum;
+  }
+
+  function maintainPetalRushThreatFloor(initial = false) {
+    if (!isPetalRush || state.mode !== 'playing') return;
+    const ready = [];
+    const waiting = [];
+    for (const replacement of state.arcadeReplacementQueue) {
+      (replacement.readyAtMs <= state.arcadeElapsedMs ? ready : waiting).push(replacement);
+    }
+    state.arcadeReplacementQueue = waiting;
+    for (const replacement of ready) {
+      spawnEnemy(replacement.type, false, replacement.type);
+    }
+
+    const minimum = petalRushThreatMinimum();
+    for (const type of PETAL_THREAT_TYPES) {
+      const active = state.enemies.filter((enemy) => (
+        !enemy.dead && enemy.rosterSlot === type
+      )).length;
+      const queued = state.arcadeReplacementQueue.filter((replacement) => replacement.type === type).length;
+      const missing = Math.max(0, minimum[type] - active - queued);
+      for (let index = 0; index < missing; index++) {
+        spawnEnemy(type, initial, type);
+      }
+    }
+  }
+
+  function schedulePetalRushReplacement(enemy) {
+    if (!isPetalRush || !PETAL_THREAT_TYPES.includes(enemy?.rosterSlot)) return;
+    state.arcadeReplacementQueue.push({
+      type: enemy.rosterSlot,
+      readyAtMs: state.arcadeElapsedMs + selectedMode.threat.replacementDelayMs
+    });
   }
 
   function showPhaseBanner(def) {
@@ -1141,6 +1342,10 @@
   }
 
   function updatePlaying(dt) {
+    if (isPetalRush) {
+      updatePetalRush(dt);
+      return;
+    }
     const def = phaseDefs[state.phaseIndex];
     updatePlayer(dt);
     updateAnchors(dt);
@@ -1158,6 +1363,34 @@
       spawnEnemy(chooseSpawnType(), false);
       state.spawnTimer = def.spawnInterval * (0.78 + random() * 0.42);
     }
+  }
+
+  function advancePetalRushClock(deltaMs) {
+    if (!isPetalRush || state.mode !== 'playing') return false;
+    const durationMs = selectedMode.durationMs;
+    state.arcadeClockMs = Math.min(durationMs, state.arcadeClockMs + Math.max(0, deltaMs));
+    state.arcadeElapsedMs = state.arcadeClockMs >= durationMs
+      ? durationMs
+      : Math.min(durationMs - 1, Math.floor(state.arcadeClockMs));
+    state.phaseTime = Math.max(0, (durationMs - state.arcadeClockMs) / 1000);
+    state.phaseProgress = state.arcadeElapsedMs;
+    if (state.arcadeClockMs < durationMs) return false;
+
+    // D-029 resolves the survival timer before any collision on the final tick.
+    state.arcadeElapsedMs = durationMs;
+    state.phaseProgress = durationMs;
+    state.phaseTime = 0;
+    finishRun(true);
+    return true;
+  }
+
+  function updatePetalRush(dt) {
+    if (advancePetalRushClock(dt * 1000)) return;
+    updatePlayer(dt);
+    updateAnchors(dt);
+    updateWeave(dt);
+    maintainPetalRushThreatFloor(false);
+    updateEnemies(dt, true);
   }
 
   function updatePlayer(dt) {
@@ -1312,6 +1545,10 @@
       audio.tone(146.83, 0.22, 0.03, 'square');
       return;
     }
+    if (isPetalRush && state.chain.length >= selectedMode.loop.maximumVertices) {
+      showToast('Eight flowers is the widest Quick Bloom.', false, 1.6);
+      return;
+    }
     state.chain.push(anchor.id);
     state.lumen = Math.max(0, state.lumen - 1.5);
     audio.pin(state.chain.length - 1);
@@ -1341,7 +1578,169 @@
     sealWeave(polygon);
   }
 
+  function petalRushScore() {
+    const scoring = selectedMode.scoring;
+    return state.loops * scoring.loops
+      + state.totalVertices * scoring.totalVertices
+      + state.shadows * scoring.shadows
+      + state.cleanLoops * scoring.cleanLoops
+      + state.chainLinks * scoring.chainLinks;
+  }
+
+  function creditPetalRushLoop(vertices, shadows, clean) {
+    const loop = selectedMode.loop;
+    if (!Number.isSafeInteger(vertices)
+      || vertices < loop.minimumVertices
+      || vertices > loop.maximumVertices
+      || !Number.isSafeInteger(shadows)
+      || shadows < 0
+      || shadows > loop.maximumShadows
+      || typeof clean !== 'boolean'
+      || state.loops >= loop.maximumLoops) {
+      return Object.freeze({ credited: false, awarded: 0, chain: false });
+    }
+
+    const previousScore = state.score;
+    const chain = state.lastArcadeLoopAtMs >= 0
+      && state.arcadeElapsedMs - state.lastArcadeLoopAtMs <= loop.chainWindowMs;
+    state.loops++;
+    state.totalVertices += vertices;
+    state.shadows += shadows;
+    if (clean) state.cleanLoops++;
+    if (chain) state.chainLinks++;
+    state.lastArcadeLoopAtMs = state.arcadeElapsedMs;
+    state.lastLoopAt = state.runTime;
+    state.comboStack = chain ? Math.min(6, state.comboStack + 1) : 0;
+    state.score = petalRushScore();
+    return Object.freeze({
+      credited: true,
+      awarded: state.score - previousScore,
+      chain
+    });
+  }
+
+  function replenishPetalRushFlowers(usedIds) {
+    const used = new Set(usedIds);
+    const anchors = state.anchors.filter((anchor) => !used.has(anchor.id));
+    const bounds = getAnchorPlacementBounds();
+    const baseMinDist = isMobileProfile()
+      ? clamp(Math.min(bounds.width, bounds.height) * 0.205, 58, 86)
+      : clamp(Math.min(bounds.width, bounds.height) * 0.14, 76, 116);
+    let attempts = 0;
+
+    while (anchors.length < selectedMode.flowerCount && attempts < 1800) {
+      attempts++;
+      const x = bounds.left + random() * Math.max(1, bounds.width);
+      const y = bounds.top + random() * Math.max(1, bounds.height);
+      if (Math.hypot(x - state.player.x, y - state.player.y) < 58) continue;
+      const relaxation = attempts > 1200 ? 0.68 : attempts > 700 ? 0.82 : 1;
+      if (anchors.some((anchor) => distance(anchor, { x, y }) < baseMinDist * relaxation)) continue;
+      anchors.push(makeAnchor(x, y, -1));
+    }
+
+    // The fallback is bounded and deterministic; it protects very small
+    // embedded frames without ever allowing the active flower count to drift.
+    while (anchors.length < selectedMode.flowerCount) {
+      const index = anchors.length;
+      const angle = index / selectedMode.flowerCount * TAU;
+      const radiusX = Math.max(24, bounds.width * 0.36);
+      const radiusY = Math.max(24, bounds.height * 0.36);
+      anchors.push(makeAnchor(
+        clamp(bounds.centerX + Math.cos(angle) * radiusX, bounds.left, bounds.right),
+        clamp(bounds.centerY + Math.sin(angle) * radiusY, bounds.top, bounds.bottom),
+        -1
+      ));
+    }
+    state.anchors = anchors.slice(0, selectedMode.flowerCount);
+  }
+
+  function sealPetalRushWeave(polygon) {
+    const usedIds = [...state.chain];
+    const caught = [];
+    for (const enemy of state.enemies) {
+      if (enemy.dead || enemy.type === 'boss' || !pointInPolygon(enemy, polygon)) continue;
+      enemy.dead = true;
+      caught.push(enemy);
+      schedulePetalRushReplacement(enemy);
+      state.wildBlooms.push({
+        x: enemy.x,
+        y: enemy.y,
+        hue: 145 + cosmeticRandom() * 190,
+        size: 0.8 + cosmeticRandom() * 0.7,
+        age: 0
+      });
+      burst(
+        enemy.x,
+        enemy.y,
+        enemy.type === 'rusher' ? '#ffad62' : enemy.type === 'seeker' ? '#ff769d' : '#73e8d2',
+        14,
+        145
+      );
+    }
+
+    const scoredShadows = Math.min(caught.length, selectedMode.loop.maximumShadows);
+    const result = creditPetalRushLoop(polygon.length, scoredShadows, state.cleanWeave);
+    for (const id of usedIds) {
+      const anchor = anchorById(id);
+      if (!anchor) continue;
+      state.wildBlooms.push({
+        x: anchor.x,
+        y: anchor.y,
+        hue: anchor.hue,
+        size: 0.7 + cosmeticRandom() * 0.45,
+        age: 0
+      });
+    }
+
+    state.lumen = Math.min(
+      state.maxLumen,
+      state.lumen + state.upgrades.captureRefund + scoredShadows * 3
+    );
+    state.regions.push({
+      points: polygon.map((point) => ({ ...point })),
+      hue: 154 + cosmeticRandom() * 170,
+      age: 0,
+      strength: clamp(0.2 + caught.length * 0.025, 0.2, 0.34)
+    });
+    while (state.regions.length > getVisualBudget().awakeningMarks) state.regions.shift();
+    addClosureSpectacle(polygon, caught.length, polygon.length);
+
+    const center = polygonCentroid(polygon);
+    const label = result.credited
+      ? `${scoredShadows ? `${scoredShadows} SHADOW${scoredShadows === 1 ? '' : 'S'} · ` : ''}+${formatNumber(result.awarded)}`
+      : 'LOOP LIMIT · KEEP GLOWING';
+    addFloater(center.x, center.y, label, scoredShadows >= 3 ? '#ffd977' : '#fff8da', 1.15);
+    if (result.credited && state.cleanWeave) {
+      window.setTimeout(() => {
+        if (state.mode === 'playing') addFloater(center.x, center.y + 22, 'CLEAN LOOP +100', '#73e8d2', 0.9);
+      }, 120);
+    }
+    if (result.chain) {
+      window.setTimeout(() => {
+        if (state.mode === 'playing') addFloater(center.x, center.y + 43, 'QUICK CHAIN +150', '#ffd977', 0.9);
+      }, 170);
+    }
+    if (caught.length > scoredShadows) {
+      showToast('Three shadows scored. Every captured shade still blooms.', false, 1.9);
+    }
+
+    audio.close(caught.length, state.cleanWeave);
+    mobileHaptic(caught.length >= 3 ? [12, 18, 18] : [9, 18, 14]);
+    burst(center.x, center.y, '#ffd977', 18 + caught.length * 5, 190);
+    state.shake = reducedMotion ? 0 : Math.min(12, 3 + caught.length * 2.2);
+    state.flash = Math.min(0.42, 0.1 + caught.length * 0.04);
+    state.enemies = state.enemies.filter((enemy) => !enemy.dead);
+    clearWeave();
+    replenishPetalRushFlowers(usedIds);
+    maintainPetalRushThreatFloor(false);
+    updateObjective();
+  }
+
   function sealWeave(polygon) {
+    if (isPetalRush) {
+      sealPetalRushWeave(polygon);
+      return;
+    }
     const now = state.runTime;
     const rescuedFray = state.frayTimer > 0;
     const chainWasAlive = now - state.lastLoopAt <= state.upgrades.chainWindow;
@@ -1860,50 +2259,167 @@
     beginPhase(state.phaseIndex + 1);
   }
 
-  function finishRun(victory) {
-    if (state.mode === 'result') return;
-    state.completed = victory;
-    state.mode = 'result';
-    clearWeave();
-    const previousBest = state.best;
-    state.best = Math.max(state.best, Math.round(state.score));
-    if (state.best > previousBest) writeBest(state.best);
-    const rank = getRank(victory, state.score);
-
-    postToGrove('run-complete', {
-      victory: Boolean(victory),
-      score: Math.round(state.score),
-      best: Math.round(state.best),
-      rank,
-      stats: {
+  function buildRunProof() {
+    if (!isPetalRush) {
+      return {
         loops: state.loops,
         shadows: state.shadows,
         phase: state.phaseIndex
-      },
+      };
+    }
+    return {
+      loops: state.loops,
+      totalVertices: state.totalVertices,
+      shadows: state.shadows,
+      cleanLoops: state.cleanLoops,
+      chainLinks: state.chainLinks,
+      elapsedMs: state.arcadeElapsedMs,
+      petals: Math.max(0, state.lives)
+    };
+  }
+
+  function finishRun(victory) {
+    if (state.mode === 'result') return;
+    if (isPetalRush) {
+      if (victory) {
+        state.arcadeClockMs = selectedMode.durationMs;
+        state.arcadeElapsedMs = selectedMode.durationMs;
+        state.phaseTime = 0;
+        state.lives = Math.max(1, state.lives);
+      } else {
+        state.arcadeClockMs = Math.min(state.arcadeClockMs, selectedMode.durationMs - 1);
+        state.arcadeElapsedMs = Math.min(
+          selectedMode.durationMs - 1,
+          Math.max(0, Math.floor(state.arcadeClockMs))
+        );
+        state.lives = 0;
+      }
+      state.score = petalRushScore();
+    }
+    state.completed = victory;
+    state.mode = 'result';
+    clearWeave();
+    const proof = buildRunProof();
+    const verifiedRemixScore = isPetalRush
+      ? modeRules.recomputeResult(selectedModeId, proof, Boolean(victory))
+      : null;
+    const proofValid = !isPetalRush || Number.isSafeInteger(verifiedRemixScore);
+    const roundedScore = isPetalRush && proofValid
+      ? verifiedRemixScore
+      : Math.round(state.score);
+    state.score = roundedScore;
+    if (!isGroveHosted) {
+      const previousBest = state.best;
+      state.best = Math.max(state.best, roundedScore);
+      if (state.best > previousBest) writeBest(state.best);
+    }
+    const rank = getRank(victory, state.score);
+
+    const grovePayload = {
+      victory: Boolean(victory),
+      score: roundedScore,
+      stats: proof,
       assist: { preset: 'standard', scoreChanging: false }
-    });
+    };
+    const completionPublished = isGroveHosted && proofValid
+      ? publishGroveRunComplete(grovePayload)
+      : !isGroveHosted;
 
     ui.resultSymbol.textContent = victory ? '✦' : '◇';
-    ui.resultKicker.textContent = victory ? 'DAWN REMEMBERS YOUR NAME' : 'THE GARDEN HOLDS YOUR LIGHT';
-    ui.resultTitle.textContent = victory ? 'The garden wakes.' : 'The night was deep.';
-    ui.resultCopy.textContent = victory
-      ? 'Every closed thread became a place where morning could begin.'
-      : 'Every flower you woke remains. The loomwing can always try another path.';
+    ui.resultKicker.textContent = isGroveHosted
+      ? 'SAVING IN THE GROVE'
+      : victory
+        ? 'DAWN REMEMBERS YOUR NAME'
+        : 'THE GARDEN HOLDS YOUR LIGHT';
+    ui.resultTitle.textContent = isPetalRush
+      ? victory
+        ? 'Ninety seconds. Still glowing.'
+        : 'One more bright loop.'
+      : victory
+        ? 'The garden wakes.'
+        : 'The night was deep.';
+    ui.resultCopy.textContent = isGroveHosted
+      ? completionPublished
+        ? isPetalRush
+          ? 'Your exact Quick Bloom proof is waiting for the Grove to take root.'
+          : 'Your exact run is waiting for the Grove to confirm its roots.'
+        : proofValid
+          ? 'The run could not be sent safely. Return to the Grove and try again.'
+          : 'This run did not produce valid proof and will not alter the Grove.'
+      : victory
+        ? 'Every closed thread became a place where morning could begin.'
+        : 'Every flower you woke remains. The loomwing can always try another path.';
     ui.resultRank.textContent = rank;
     ui.resultScore.textContent = formatNumber(state.score);
-    ui.resultBest.textContent = formatNumber(state.best);
+    ui.resultBestLabel.textContent = isGroveHosted ? 'SAVE' : 'BEST';
+    ui.resultBest.textContent = isGroveHosted ? 'WAITING' : formatNumber(state.best);
     ui.resultLoops.textContent = String(state.loops);
     ui.resultShadows.textContent = String(state.shadows);
-    if (isTrialRun) {
+    if (isGroveHosted) {
       ui.replayButton.disabled = true;
-      ui.replayButton.querySelector('span').textContent = 'TRIAL RUN COMPLETE · CONTINUE IN THE GROVE';
-      ui.replayButton.querySelector('i')?.setAttribute('hidden', '');
-      ui.replayButton.setAttribute('aria-label', 'Trial run complete. Continue in the Grove.');
+      ui.homeButton.disabled = true;
+      if (!proofValid) {
+        ui.replayButton.disabled = isTrialRun;
+        ui.homeButton.disabled = false;
+        ui.replayButton.setAttribute('aria-label', 'Restart Petal Rush');
+      }
+      ui.replayButton.querySelector('span').textContent = 'SAVING…';
+      if (isTrialRun) {
+        ui.replayButton.querySelector('i')?.setAttribute('hidden', '');
+        ui.replayButton.setAttribute('aria-label', 'Trial run saving. Continue in the Grove after confirmation.');
+      }
     }
     openDialog(ui.resultOverlay, isTrialRun ? null : ui.replayButton);
   }
 
+  function finalizeHostedResult(phase) {
+    if (!isGroveHosted || !['saved', 'unsaved', 'pending'].includes(phase)) return;
+    const saved = phase === 'saved';
+    const pending = phase === 'pending';
+    ui.resultKicker.textContent = pending
+      ? 'SAVE PAUSED IN THE GROVE'
+      : saved
+        ? 'ROOTED IN THE GROVE'
+        : 'UNSAVED RUN';
+    ui.resultCopy.textContent = pending
+      ? 'The Grove is holding this exact score safely. Use its Retry Save choice before leaving.'
+      : saved
+        ? state.completed
+          ? isPetalRush
+            ? 'The Grove confirmed every second and every point before showing them.'
+            : 'The Grove confirmed this dawn before showing it.'
+          : 'The Grove confirmed every point that took root.'
+        : 'You can see this run, but it did not change Best, Tree Total, growth, or unlocks.';
+    ui.resultBestLabel.textContent = 'STATUS';
+    ui.resultBest.textContent = pending ? 'WAITING' : saved ? 'SAVED' : 'UNSAVED';
+    ui.replayButton.disabled = pending || isTrialRun;
+    ui.homeButton.disabled = pending;
+    ui.replayButton.querySelector('span').textContent = isTrialRun
+      ? 'TRIAL RUN COMPLETE · CONTINUE IN THE GROVE'
+      : isPetalRush
+        ? 'PLAY PETAL RUSH AGAIN'
+        : 'WEAVE ANOTHER NIGHT';
+    if (isTrialRun) {
+      ui.replayButton.querySelector('i')?.setAttribute('hidden', '');
+      ui.replayButton.setAttribute('aria-label', 'Trial run complete. Continue in the Grove.');
+    } else {
+      ui.replayButton.querySelector('i')?.removeAttribute('hidden');
+      ui.replayButton.setAttribute('aria-label', isPetalRush ? 'Play Petal Rush again' : 'Weave another night');
+    }
+    if (!pending) {
+      window.setTimeout(() => (isTrialRun ? ui.homeButton : ui.replayButton).focus({ preventScroll: true }), 60);
+    }
+  }
+
   function getRank(victory, score) {
+    if (isPetalRush) {
+      if (victory && score >= 30000) return 'QUICK BLOOM MASTER';
+      if (victory && score >= 15000) return 'PETAL COMET';
+      if (victory) return 'BRIGHT SURVIVOR';
+      if (score >= 9000) return 'CHAIN WEAVER';
+      if (score >= 3500) return 'BLOOM RUNNER';
+      return 'FIRST SPARK';
+    }
     if (victory && score >= 14000) return 'DAWN ARCHITECT';
     if (victory && score >= 9500) return 'MOONLOOM MASTER';
     if (victory) return 'NIGHT WEAVER';
@@ -1936,6 +2452,15 @@
   }
 
   function updateObjective() {
+    if (isPetalRush) {
+      const remainingSeconds = Math.max(0, Math.ceil((selectedMode.durationMs - state.arcadeClockMs) / 1000));
+      ui.objectiveKicker.textContent = `QUICK BLOOM · ${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+      ui.objectiveText.textContent = isMobileProfile()
+        ? 'Close loops · keep a petal'
+        : 'Close bright loops and keep at least one petal';
+      ui.objectiveProgress.textContent = `${state.loops} LOOP${state.loops === 1 ? '' : 'S'}`;
+      return;
+    }
     const phase = phaseDefs[state.phaseIndex];
     const mobile = isMobileProfile();
     if (state.phaseIndex === 0) {
@@ -1970,12 +2495,16 @@
   }
 
   function updateHud() {
-    const phaseTitle = phaseDefs[state.phaseIndex]?.title || 'LUMENLOOM';
+    const phaseTitle = isPetalRush
+      ? 'PETAL RUSH'
+      : phaseDefs[state.phaseIndex]?.title || 'LUMENLOOM';
     ui.phaseName.textContent = isMobileProfile()
       ? ({ 'FIRST STITCH': 'STITCH', 'THE HOLLOW': 'HOLLOW' }[phaseTitle] || phaseTitle)
       : phaseTitle;
     ui.scoreValue.textContent = formatNumber(state.score);
-    ui.bestValue.textContent = `BEST ${formatNumber(Math.max(state.best, state.score))}`;
+    ui.bestValue.textContent = isPetalRush
+      ? '90 SECOND SCORE ATTACK'
+      : `BEST ${formatNumber(Math.max(state.best, state.score))}`;
     const lumenPercent = clamp(state.lumen / state.maxLumen * 100, 0, 100);
     ui.lumenFill.style.width = `${lumenPercent}%`;
     ui.lumenFill.classList.toggle('is-low', lumenPercent < 24 || state.frayTimer > 0);
@@ -1990,7 +2519,9 @@
     ui.weaveButton.setAttribute('aria-label', weaving ? 'Release and close the weave' : 'Begin weaving');
     const multiplier = 1 + state.comboStack * 0.25;
     ui.comboBadge.classList.toggle('is-hidden', state.comboStack <= 0 || state.mode === 'title');
-    ui.comboValue.textContent = `×${multiplier.toFixed(2).replace(/0$/, '')}`;
+    ui.comboValue.textContent = isPetalRush
+      ? `${state.comboStack + 1} LOOP CHAIN`
+      : `×${multiplier.toFixed(2).replace(/0$/, '')}`;
     const progress = state.phaseTarget ? clamp(state.phaseProgress / state.phaseTarget * 100, 0, 100) : 0;
     ui.objectiveFill.style.width = `${progress}%`;
     updateObjective();
@@ -3428,6 +3959,97 @@
     });
   }
 
+  function getArcadeQaSnapshot() {
+    const enemyCounts = Object.fromEntries(PETAL_THREAT_TYPES.map((type) => [
+      type,
+      state.enemies.filter((enemy) => !enemy.dead && enemy.type === type).length
+    ]));
+    return Object.freeze({
+      selectedModeId,
+      runtimeMode: state.mode,
+      victory: state.mode === 'result' ? state.completed : null,
+      elapsedMs: state.arcadeElapsedMs,
+      durationMs: isPetalRush ? selectedMode.durationMs : null,
+      score: Math.round(state.score),
+      lives: state.lives,
+      flowers: state.anchors.length,
+      enemyCounts: Object.freeze(enemyCounts),
+      replacements: Object.freeze(state.arcadeReplacementQueue.map((replacement) => Object.freeze({ ...replacement }))),
+      proof: Object.freeze({ ...buildRunProof() })
+    });
+  }
+
+  function advancePetalRushClockForQa(milliseconds) {
+    if (!isPetalRush || state.mode !== 'playing') {
+      throw new Error('Start a Petal Rush run before advancing its QA clock.');
+    }
+    const delta = Number(milliseconds);
+    if (!Number.isSafeInteger(delta) || delta < 0 || delta > selectedMode.durationMs) {
+      throw new RangeError('Petal Rush QA milliseconds must be a safe integer within one full run.');
+    }
+    state.runTime += delta / 1000;
+    const finished = advancePetalRushClock(delta);
+    if (!finished) maintainPetalRushThreatFloor(false);
+    updateHud();
+    return getArcadeQaSnapshot();
+  }
+
+  function capturePetalRushThreatForQa(type, count = 1) {
+    if (!isPetalRush || state.mode !== 'playing' || !PETAL_THREAT_TYPES.includes(type)) {
+      throw new Error('Petal Rush QA capture requires an active canonical threat type.');
+    }
+    const amount = Number(count);
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 4) {
+      throw new RangeError('Petal Rush QA capture count must be an integer from 1 to 4.');
+    }
+    const captured = state.enemies
+      .filter((enemy) => !enemy.dead && enemy.type === type)
+      .slice(0, amount);
+    captured.forEach((enemy) => {
+      enemy.dead = true;
+      schedulePetalRushReplacement(enemy);
+    });
+    state.enemies = state.enemies.filter((enemy) => !enemy.dead);
+    maintainPetalRushThreatFloor(false);
+    return getArcadeQaSnapshot();
+  }
+
+  function creditPetalRushLoopForQa(vertices, shadows, clean, elapsedMs) {
+    if (!isPetalRush || state.mode !== 'playing') {
+      throw new Error('Petal Rush QA loop credit requires an active run.');
+    }
+    const atMs = Number(elapsedMs);
+    if (!Number.isSafeInteger(atMs)
+      || atMs < state.arcadeElapsedMs
+      || atMs >= selectedMode.durationMs) {
+      throw new RangeError('Petal Rush QA loop time must be monotonic and earlier than the finish.');
+    }
+    state.arcadeClockMs = atMs;
+    state.arcadeElapsedMs = atMs;
+    state.phaseProgress = atMs;
+    state.phaseTime = (selectedMode.durationMs - atMs) / 1000;
+    state.runTime = atMs / 1000;
+    const credited = creditPetalRushLoop(Number(vertices), Number(shadows), Boolean(clean));
+    updateHud();
+    return Object.freeze({ ...getArcadeQaSnapshot(), credited });
+  }
+
+  function defeatPetalRushForQa(elapsedMs) {
+    if (!isPetalRush || state.mode !== 'playing') {
+      throw new Error('Petal Rush QA defeat requires an active run.');
+    }
+    const atMs = Number(elapsedMs);
+    if (!Number.isSafeInteger(atMs) || atMs < 0 || atMs >= selectedMode.durationMs) {
+      throw new RangeError('Petal Rush QA defeat must happen before 90 seconds.');
+    }
+    state.arcadeClockMs = atMs;
+    state.arcadeElapsedMs = atMs;
+    state.runTime = atMs / 1000;
+    state.lives = 0;
+    finishRun(false);
+    return getArcadeQaSnapshot();
+  }
+
   function setFrayContactScenario(goldenFibers = 0) {
     if (state.mode !== 'playing') throw new Error('Start a Lumenloom run before configuring a fray QA scenario.');
     const goldenCount = Number(goldenFibers);
@@ -3551,14 +4173,47 @@
   const qaHostAllowed = window.location.protocol === 'file:'
     || ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
 
+  function finishRunForQa(victory = true) {
+    if (!qaHostAllowed) throw new Error('Lumenloom QA controls are available only on local builds.');
+    if (state.mode === 'result') {
+      return Object.freeze({ mode: state.mode, completed: state.completed, score: Math.round(state.score) });
+    }
+    if (state.mode === 'title') startRun();
+    if (isPetalRush) {
+      if (state.mode !== 'playing') {
+        throw new Error('Wait for the Grove to accept the Petal Rush start before completing QA.');
+      }
+      if (victory) {
+        advancePetalRushClock(selectedMode.durationMs - state.arcadeClockMs);
+      } else {
+        state.lives = 0;
+        finishRun(false);
+      }
+      return Object.freeze({ mode: state.mode, completed: state.completed, score: Math.round(state.score) });
+    }
+    state.score = Math.max(state.score, victory ? 15000 : 750);
+    state.loops = Math.max(state.loops, victory ? 12 : 2);
+    state.shadows = Math.max(state.shadows, victory ? 25 : 3);
+    if (victory) state.phaseIndex = phaseDefs.length - 1;
+    else state.lives = 0;
+    finishRun(Boolean(victory));
+    return Object.freeze({ mode: state.mode, completed: state.completed, score: Math.round(state.score) });
+  }
+
   // Keep deterministic geometry inspectable for local regression tests without
   // publishing a live-state inspection surface in production builds.
   if (qaHostAllowed) {
     window.__LUMENLOOM_QA__ = Object.freeze({
       getControlProfile: () => controlProfile,
+      getSelectedMode: () => Object.freeze({ id: selectedModeId, mode: selectedMode }),
       getPlayBounds: () => Object.freeze({ ...playBounds }),
       getGeometrySnapshot,
       getFrayBalance: () => FRAY_BALANCE,
+      getArcadeSnapshot: getArcadeQaSnapshot,
+      advanceArcadeClock: advancePetalRushClockForQa,
+      captureArcadeThreat: capturePetalRushThreatForQa,
+      creditArcadeLoop: creditPetalRushLoopForQa,
+      defeatArcadeRun: defeatPetalRushForQa,
       setFrayContactScenario,
       rescueFrayingWeaveForQa,
       triggerMoonfallDuringFrayForQa,
@@ -3568,6 +4223,7 @@
       getVisualSnapshot,
       getRngSnapshot,
       setVisualScenario,
+      finishRun: finishRunForQa,
       setReducedMotion: setQaReducedMotion,
       renderForQa,
       assertCosmeticIsolation,
@@ -3633,9 +4289,7 @@
       completePhase();
     });
     addButton('QA FAIL RUN', () => {
-      if (state.mode === 'title') startRun();
-      state.lives = 0;
-      finishRun(false);
+      finishRunForQa(false);
     });
     addButton('QA DAWN', () => {
       if (state.mode === 'title') startRun();
@@ -3661,6 +4315,56 @@
     });
   }
 
+  function isTrustedGroveResponse(event) {
+    if (!isGroveHosted || event.source !== window.parent) return false;
+    if (window.location.protocol === 'file:') {
+      return !event.origin || event.origin === 'null';
+    }
+    return event.origin === window.location.origin;
+  }
+
+  function handleGroveResponse(event) {
+    if (!isTrustedGroveResponse(event)) return;
+    const previous = groveClient;
+    const next = groveBridge.reduceClient(previous, {
+      type: groveBridge.CLIENT_ACTIONS.PARENT_MESSAGE,
+      message: event.data
+    });
+    if (next === previous) return;
+    groveClient = next;
+
+    if (previous.phase === 'awaiting-start' && next.phase === 'running') {
+      beginRun();
+      return;
+    }
+    if (next.phase === 'pending' || next.phase === 'saved' || next.phase === 'unsaved') {
+      finalizeHostedResult(next.phase);
+      return;
+    }
+    if (previous.phase === 'awaiting-action' && next.phase === 'ready') {
+      ui.replayButton.disabled = true;
+      ui.homeButton.disabled = true;
+      requestGroveStart();
+      return;
+    }
+    if (previous.phase === 'awaiting-action'
+      && next.phase === previous.actionOrigin
+      && next.lastRejection) {
+      ui.quitButton.disabled = false;
+      ui.pauseRestartButton.disabled = isTrialRun;
+      ui.homeButton.disabled = next.phase === 'pending';
+      ui.replayButton.disabled = next.phase === 'pending' || isTrialRun;
+      showToast(next.lastRejection === 'trial-locked'
+        ? 'The Grove Trial must continue forward.'
+        : 'The Grove kept that action paused.', true, 2.2);
+      return;
+    }
+    if (next.phase === 'awaiting-start' && next.lastRejection) {
+      showToast('The Grove is waiting for a safe start choice.', true, 2.2);
+    }
+  }
+
+  window.addEventListener('message', handleGroveResponse);
   window.addEventListener('resize', scheduleResize);
   window.visualViewport?.addEventListener('resize', scheduleResize);
   window.addEventListener('orientationchange', () => {
@@ -3698,7 +4402,8 @@
       return;
     }
     if (key === 'r' && state.mode === 'result' && !isTrialRun) {
-      startRun();
+      if (isGroveHosted) requestGroveSessionAction('restart');
+      else startRun();
       return;
     }
     if (key === ' ' && !event.repeat) {
@@ -3766,12 +4471,23 @@
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   ui.playButton.addEventListener('click', startRun);
-  ui.replayButton.addEventListener('click', startRun);
-  ui.homeButton.addEventListener('click', goHome);
+  ui.replayButton.addEventListener('click', () => {
+    if (isGroveHosted) requestGroveSessionAction('restart');
+    else startRun();
+  });
+  ui.homeButton.addEventListener('click', () => {
+    if (isGroveHosted) requestGroveSessionAction('grove');
+    else goHome();
+  });
   ui.resumeButton.addEventListener('click', resumeGame);
+  ui.pauseRestartButton.addEventListener('click', () => {
+    if (isTrialRun) return;
+    if (isGroveHosted) requestGroveSessionAction('restart');
+    else startRun();
+  });
   ui.quitButton.addEventListener('click', () => {
-    postToGrove('run-abandon');
-    goHome();
+    if (isGroveHosted) requestGroveSessionAction('grove');
+    else goHome();
   });
   ui.pauseButton.addEventListener('click', pauseGame);
   ui.soundButton.addEventListener('click', () => audio.toggle());
@@ -3820,12 +4536,27 @@
       if (state.particles.length > 180) state.particles.splice(0, state.particles.length - 180);
     }
   });
+  window.addEventListener('pagehide', () => {
+    publishGroveAbandon();
+  });
 
   ui.startBest.textContent = `PERSONAL BEST · ${formatNumber(state.best)}`;
+  if (isGroveHosted) {
+    ui.startBest.textContent = 'GROVE SESSION · PARENT-SAVED';
+    ui.quitButton.textContent = 'Return to Grove';
+    ui.homeButton.textContent = 'Return to Grove';
+    ui.replayButton.querySelector('span').textContent = 'RETRY';
+  }
+  ui.pauseRestartButton.hidden = isTrialRun;
+  ui.pauseRestartButton.disabled = isTrialRun;
   setupQaControls();
   resize();
   syncDialogState();
-  postToGrove('game-ready');
-  window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 100);
+  if (isGroveHosted) {
+    publishGroveReady();
+    requestGroveStart();
+  } else {
+    window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 100);
+  }
   requestAnimationFrame(frame);
 })();

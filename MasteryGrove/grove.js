@@ -6,10 +6,27 @@
   const $ = (id) => document.getElementById(id);
   const progression = window.MasteryGroveProgression;
   if (!progression) throw new Error('Mastery Grove progression engine did not load.');
-  const STORAGE_KEY = 'first-bloom-grove-v1';
-  const BACKUP_STORAGE_KEY = 'first-bloom-grove-v1-backup';
+  const protocolV2 = window.FirstBloomProtocolV2;
+  if (!protocolV2) throw new Error('Mastery Grove protocol v2 did not load.');
+  const lumenloomSession = window.FirstBloomLumenloomSession;
+  if (!lumenloomSession) throw new Error('Mastery Grove Lumenloom session coordinator did not load.');
+  if (!window.MasteryGroveProfileStorage) throw new Error('Mastery Grove profile storage did not load.');
+  const firstBloom = window.MasteryGroveFirstBloom;
+  if (!firstBloom) throw new Error('Mastery Grove First Bloom engine did not load.');
+  const carousel = window.MasteryGroveCarousel || null;
+  const lumenloomModes = window.LumenloomModes || null;
+  const carouselDependencies = carousel && lumenloomModes
+    ? Object.freeze({ progression, modeRules: lumenloomModes })
+    : null;
+  const storageAdapter = Object.freeze({
+    getItem(key) { return window.localStorage.getItem(key); },
+    setItem(key, value) { window.localStorage.setItem(key, value); }
+  });
+  const profileStorageController = window.MasteryGroveProfileStorage.createProfileStorage(
+    storageAdapter,
+    { progression }
+  );
   const GROVE_SOUND_KEY = 'first-bloom-grove-audio-v1';
-  const PROFILE_VERSION = progression.PROFILE_VERSION;
   const COLLECTION_SIZE = 10;
   const TAU = Math.PI * 2;
   const SCORE_COUNT_DURATION_MS = 680;
@@ -92,6 +109,35 @@
 
   const ui = {
     groveScreen: $('groveScreen'),
+    livingCarousel: $('livingCarousel'),
+    livingCarouselNumber: $('livingCarouselNumber'),
+    livingCarouselGame: $('livingCarouselGame'),
+    livingCarouselSpecies: $('livingCarouselSpecies'),
+    livingCarouselRank: $('livingCarouselRank'),
+    livingCarouselSeeds: $('livingCarouselSeeds'),
+    livingCarouselHelpButton: $('livingCarouselHelpButton'),
+    livingCarouselJournalButton: $('livingCarouselJournalButton'),
+    livingCarouselStage: $('livingCarouselStage'),
+    livingCarouselTreeVisual: $('livingCarouselTreeVisual'),
+    livingCarouselTreeSymbol: document.querySelector('.living-carousel-tree-symbol'),
+    livingCarouselGrowthStage: $('livingCarouselGrowthStage'),
+    livingCarouselBest: $('livingCarouselBest'),
+    livingCarouselTarget: $('livingCarouselTarget'),
+    livingCarouselModes: $('livingCarouselModes'),
+    livingCarouselModeButtons: [...document.querySelectorAll('[data-carousel-mode]')],
+    livingCarouselPlayButton: $('livingCarouselPlayButton'),
+    livingCarouselTrialButton: $('livingCarouselTrialButton'),
+    livingCarouselTrialStatus: $('livingCarouselTrialStatus'),
+    livingCarouselHarmony: $('livingCarouselHarmony'),
+    livingCarouselHarmonyPips: $('livingCarouselHarmony')?.querySelector('strong'),
+    livingCarouselRail: $('livingCarouselRail'),
+    livingCarouselTreeOptions: [...document.querySelectorAll('.living-carousel-option[data-carousel-position]')],
+    livingCarouselPageDots: $('livingCarouselPageDots'),
+    livingCarouselPageButtons: [...document.querySelectorAll('[data-carousel-page-button]')],
+    livingCarouselLive: $('livingCarouselLive'),
+    legacyCatalogue: $('legacyCatalogue'),
+    sleepingGrove: document.querySelector('.sleeping-grove'),
+    groveFooter: document.querySelector('.grove-footer'),
     headerRank: $('headerRank'),
     headerBloomCount: $('headerBloomCount'),
     groveRank: $('groveRank'),
@@ -165,8 +211,35 @@
     profileStatus: $('profileStatus'),
     storageWarning: $('storageWarning'),
     storageWarningText: $('storageWarningText'),
-    introOverlay: $('introOverlay'),
-    enterGroveButton: $('enterGroveButton'),
+    saveRecoveryOverlay: $('saveRecoveryOverlay'),
+    pendingSaveTitle: $('pendingSaveTitle'),
+    pendingSaveCopy: $('pendingSaveCopy'),
+    pendingRetryButton: $('pendingRetryButton'),
+    pendingSessionButton: $('pendingSessionButton'),
+    pendingReturnButton: $('pendingReturnButton'),
+    firstBloomOverlay: $('firstBloomOverlay'),
+    firstBloomStage: $('firstBloomStage'),
+    firstBloomLoomwing: $('firstBloomLoomwing'),
+    firstBloomThreadSvg: $('firstBloomThreadSvg'),
+    firstBloomThreadPath: $('firstBloomThreadPath'),
+    firstBloomCuePath: $('firstBloomCuePath'),
+    firstBloomFlowerButtons: [
+      $('firstBloomFlower1'),
+      $('firstBloomFlower2'),
+      $('firstBloomFlower3')
+    ],
+    firstBloomCue: $('firstBloomCue'),
+    firstBloomTreeReveal: $('firstBloomTreeReveal'),
+    firstBloomHint: $('firstBloomHint'),
+    firstBloomSaveStatus: $('firstBloomSaveStatus'),
+    firstBloomLive: $('firstBloomLive'),
+    firstBloomSkipButton: $('firstBloomSkipButton'),
+    firstBloomDirectionButtons: [
+      $('firstBloomMoveUp'),
+      $('firstBloomMoveLeft'),
+      $('firstBloomMoveRight'),
+      $('firstBloomMoveDown')
+    ],
     growthOverlay: $('growthOverlay'),
     growthPanel: $('growthPanel'),
     scoreStream: $('scoreStream'),
@@ -265,10 +338,35 @@
   let storageAvailable = true;
   let storageReadOnly = false;
   let storageRecovered = false;
+  let storageCleanupIncomplete = false;
   let storageNotice = '';
-  let profile = loadProfile();
+  let profile;
+  let carouselState = null;
+  let carouselActive = false;
+  let carouselFailed = false;
+  let carouselPointer = null;
+  let carouselSuppressClickUntil = 0;
+  const carouselGamepadState = new Map();
+  let carouselLastGamepadMoveAt = 0;
+  let releaseInfoReturnsToSettings = false;
+  let pendingSave = null;
+  let recoveryRequiresReload = false;
+  let firstBloomState = null;
+  let firstBloomTickTimer = 0;
+  let firstBloomLastTickAt = 0;
+  let firstBloomPointerId = null;
+  let firstBloomPointerFrame = 0;
+  let firstBloomPointerPosition = null;
+  let firstBloomCompleting = false;
+  let firstBloomRevealCommitted = false;
+  let firstBloomRevealTimer = 0;
+  let firstBloomGeneration = 0;
+  let firstBloomLastAnnouncementKey = '';
+  let firstBloomSessionOnly = false;
   let activeGameId = null;
   let activeSession = null;
+  let activeLumenloomState = null;
+  let activeLumenloomModeId = null;
   let activeSessionId = null;
   let readyTimer = 0;
   let ceremonyQueue = [];
@@ -511,52 +609,16 @@
     return progression.defaultProfile();
   }
 
-  function loadProfile() {
-    let source = null;
-    let sourceText = null;
-    let backupText = null;
+  function readStandaloneBests() {
     const standaloneBests = {};
     try {
-      const probeKey = `${STORAGE_KEY}-probe`;
-      localStorage.setItem(probeKey, '1');
-      localStorage.removeItem(probeKey);
-      sourceText = localStorage.getItem(STORAGE_KEY);
-      backupText = localStorage.getItem(BACKUP_STORAGE_KEY);
       for (const game of Object.values(GAMES)) {
         if (!game.importStandaloneBest) continue;
         const value = Number(localStorage.getItem(game.standaloneKey));
         if (Number.isSafeInteger(value) && value >= 0) standaloneBests[game.id] = value;
       }
-    } catch (_) {
-      storageAvailable = false;
-      storageNotice = 'This browser blocked local saves. This session will still play, but progress will be lost when it closes.';
-    }
-
-    if (sourceText) {
-      try { source = JSON.parse(sourceText); }
-      catch (_) {
-        storageRecovered = true;
-        storageNotice = 'The newest save was damaged. The Grove is attempting to recover its previous safe copy.';
-      }
-    }
-
-    let migrated = progression.migrateProfile(source, standaloneBests);
-    if (!migrated.ok && migrated.code === 'future-profile') {
-      storageReadOnly = true;
-      storageNotice = `This save belongs to a newer Grove (profile v${migrated.sourceVersion}). It has been preserved without changes.`;
-    }
-    if ((!migrated.ok || storageRecovered) && backupText) {
-      try {
-        const recovered = progression.migrateProfile(JSON.parse(backupText), standaloneBests);
-        if (recovered.ok) {
-          migrated = recovered;
-          storageRecovered = true;
-          if (!storageReadOnly) storageNotice = 'The previous safe copy was recovered. Export a backup before continuing.';
-        }
-      } catch (_) { /* A damaged recovery slot is ignored. */ }
-    }
-    if (!migrated.ok) migrated = progression.migrateProfile(null, standaloneBests);
-    return migrated.profile;
+    } catch (_) { /* The storage controller reports authoritative availability. */ }
+    return standaloneBests;
   }
 
   function cloneProfile(source = profile) {
@@ -569,58 +631,932 @@
     return migrated.profile;
   }
 
-  function updateProfile(mutator, options = {}) {
-    const draft = cloneProfile();
+  function proposeProfile(mutator, options = {}) {
+    const draft = cloneProfile(options.source || profile);
     mutator(draft);
     if (options.timestamp !== false) draft.updatedAt = new Date().toISOString();
-    profile = canonicalizeProfile(draft);
-    return profile;
+    return canonicalizeProfile(draft);
   }
 
-  function saveProfile(options = {}) {
-    if (options.timestamp !== false) {
-      const draft = cloneProfile();
-      draft.updatedAt = new Date().toISOString();
-      profile = canonicalizeProfile(draft);
+  function sessionProfileResult(candidate, fields = {}) {
+    return Object.freeze({
+      ok: true,
+      code: 'session-only',
+      state: 'read-only',
+      saved: false,
+      readOnly: true,
+      profile: candidate,
+      ...fields
+    });
+  }
+
+  function installProfileResult(result) {
+    if (!result?.ok || !progression.isCanonicalProfile(result.profile)) return false;
+    profile = result.profile;
+    return true;
+  }
+
+  function blockedSaveResult(code, readOnly = storageReadOnly) {
+    return Object.freeze({
+      ok: false,
+      code,
+      state: readOnly ? 'read-only' : 'retryable',
+      readOnly,
+      recovered: false,
+      profile: null,
+      retryPayload: pendingSave?.retryPayload || null,
+      pendingLabel: pendingSave?.label || null
+    });
+  }
+
+  function storageFailureNotice(result, label = 'Progress') {
+    if (result?.code === 'future-profile' || result?.code === 'future-recovery-profile') {
+      return `This save belongs to a newer Grove (profile v${result.sourceVersion}). It has been preserved without changes.`;
     }
-    if (!storageAvailable || storageReadOnly) {
-      if (ui.profileStatus) ui.profileStatus.textContent = storageReadOnly
+    if (result?.code === 'future-current') {
+      return `A newer Grove save appeared in another tab (profile v${result.sourceVersion}). It was preserved. Reload before saving again.`;
+    }
+    if (result?.code === 'stale-current') {
+      return 'Another tab changed this Grove. Its progress was preserved. Reload this page before saving again.';
+    }
+    if (result?.code === 'storage-unavailable') {
+      return 'This browser blocked local saves. This session will still play, but progress will be lost when it closes.';
+    }
+    if (result?.code === 'no-valid-profile') {
+      return 'Neither local save copy could be verified. The damaged data was preserved; Reset is available if you want a fresh Grove.';
+    }
+    if (result?.recovered) {
+      return `The previous safe copy was restored after ${label.toLowerCase()} could not be verified. Retry uses the exact same save.`;
+    }
+    if (result?.retryPayload) {
+      return `${label} is paused because local storage could not be verified. Retry Save will use the exact same result and timestamp.`;
+    }
+    return `${label} could not be saved. The installed Grove profile was not changed.`;
+  }
+
+  function reflectStorageFailure(result, label) {
+    storageReadOnly = Boolean(result?.readOnly);
+    storageRecovered = storageRecovered || Boolean(result?.recovered);
+    storageAvailable = result?.code !== 'storage-unavailable';
+    storageNotice = storageFailureNotice(result, label);
+    if (ui.profileStatus) {
+      ui.profileStatus.textContent = result?.retryPayload
+        ? 'LOCAL KEEPER PROFILE · SAVE PAUSED'
+        : storageReadOnly
+          ? 'PROTECTED PROFILE · SESSION ONLY'
+          : 'SESSION PROFILE · STORAGE UNAVAILABLE';
+    }
+    updateStorageWarning();
+  }
+
+  function reflectStorageSuccess() {
+    storageAvailable = true;
+    storageReadOnly = false;
+    if (!storageRecovered && !storageCleanupIncomplete) storageNotice = '';
+    if (ui.profileStatus) ui.profileStatus.textContent = 'LOCAL KEEPER PROFILE · SAVED';
+    updateStorageWarning();
+  }
+
+  function rememberPendingSave(result, resume, label, options = {}) {
+    const retryPayload = result?.retryPayload || null;
+    if (!retryPayload && !options.allowNoRetry) return;
+    recoveryRequiresReload = false;
+    pendingSave = Object.freeze({
+      retryPayload,
+      resume: typeof resume === 'function' ? resume : null,
+      label,
+      allowSessionEscape: Boolean(options.allowSessionEscape),
+      sessionEscapeLabel: typeof options.sessionEscapeLabel === 'string'
+        ? options.sessionEscapeLabel
+        : 'PLAY THIS VISIT · NOT SAVED',
+      onSessionEscape: typeof options.onSessionEscape === 'function'
+        ? options.onSessionEscape
+        : null,
+      allowReturn: Boolean(options.allowReturn),
+      returnLabel: typeof options.returnLabel === 'string'
+        ? options.returnLabel
+        : 'RETURN WITHOUT SAVING',
+      onReturn: typeof options.onReturn === 'function' ? options.onReturn : null,
+      sessionProfile: progression.isCanonicalProfile(options.sessionProfile)
+        ? options.sessionProfile
+        : null
+    });
+    ui.pendingSaveTitle.textContent = `${label} is waiting safely.`;
+    ui.pendingSaveCopy.textContent = typeof options.pendingCopy === 'string'
+      ? options.pendingCopy
+      : pendingSave.allowSessionEscape
+        ? `The Grove has not installed or presented ${label.toLowerCase()} yet. Retry the exact save, or play this visit without saving it.`
+        : `The Grove has not installed or presented ${label.toLowerCase()} yet.`;
+    ui.pendingRetryButton.querySelector('span').textContent = 'RETRY SAVE';
+    ui.pendingRetryButton.hidden = !pendingSave.retryPayload;
+    ui.pendingRetryButton.disabled = !pendingSave.retryPayload;
+    ui.pendingSessionButton.querySelector('span').textContent = pendingSave.sessionEscapeLabel;
+    ui.pendingSessionButton.hidden = !pendingSave.allowSessionEscape;
+    ui.pendingSessionButton.disabled = !pendingSave.allowSessionEscape;
+    ui.pendingReturnButton.querySelector('span').textContent = pendingSave.returnLabel;
+    ui.pendingReturnButton.hidden = !pendingSave.allowReturn;
+    ui.pendingReturnButton.disabled = !pendingSave.allowReturn;
+    setOverlay(ui.saveRecoveryOverlay, true);
+    const recoveryFocus = pendingSave.retryPayload
+      ? ui.pendingRetryButton
+      : pendingSave.allowSessionEscape
+        ? ui.pendingSessionButton
+        : ui.pendingReturnButton;
+    window.setTimeout(() => recoveryFocus.focus({ preventScroll: true }), 80);
+  }
+
+  function showReloadRecovery(result, label) {
+    recoveryRequiresReload = true;
+    const concurrentChange = ['future-current', 'stale-current'].includes(result?.code);
+    ui.pendingSaveTitle.textContent = concurrentChange
+      ? 'Another Grove save was preserved.'
+      : 'The saved Grove needs a fresh check.';
+    ui.pendingSaveCopy.textContent = result?.code === 'future-current'
+      ? 'A newer-version Grove appeared before this change could be saved.'
+      : result?.code === 'stale-current'
+        ? `Another tab changed the Grove before ${label.toLowerCase()} could be saved.`
+        : `The browser could not safely finish ${label.toLowerCase()}. Previously saved progress was left untouched.`;
+    ui.pendingRetryButton.querySelector('span').textContent = 'RELOAD THE GROVE';
+    ui.pendingRetryButton.hidden = false;
+    ui.pendingSessionButton.hidden = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.hidden = true;
+    ui.pendingReturnButton.disabled = true;
+    setOverlay(ui.saveRecoveryOverlay, true);
+    window.setTimeout(() => ui.pendingRetryButton.focus({ preventScroll: true }), 80);
+  }
+
+  function commitProfile(proposed, options = {}) {
+    if (pendingSave) return blockedSaveResult('commit-pending');
+    if (storageReadOnly) {
+      if (!options.allowSessionOnly) return blockedSaveResult('storage-read-only', true);
+      const sessionResult = sessionProfileResult(proposed);
+      if (!installProfileResult(sessionResult)) return blockedSaveResult('invalid-session-profile', true);
+      updateStorageWarning();
+      return sessionResult;
+    }
+    const committed = profileStorageController.commit(profile, proposed);
+    if (!installProfileResult(committed)) {
+      rememberPendingSave(
+        committed,
+        options.resume,
+        options.label || 'Progress',
+        {
+          allowSessionEscape: options.allowSessionEscape,
+          sessionEscapeLabel: options.sessionEscapeLabel,
+          onSessionEscape: options.onSessionEscape,
+          allowReturn: options.allowReturn,
+          returnLabel: options.returnLabel,
+          onReturn: options.onReturn,
+          pendingCopy: options.pendingCopy,
+          sessionProfile: options.sessionProfile
+        }
+      );
+      reflectStorageFailure(committed, options.label || 'Progress');
+      if (!committed.retryPayload && committed.readOnly && !options.allowNoRetryChoice) {
+        showReloadRecovery(committed, options.label || 'Progress');
+      }
+      return committed;
+    }
+    pendingSave = null;
+    reflectStorageSuccess();
+    return committed;
+  }
+
+  function resetProfileStorage(options = {}) {
+    if (pendingSave) return blockedSaveResult('commit-pending');
+    const committed = profileStorageController.reset();
+    if (!installProfileResult(committed)) {
+      rememberPendingSave(committed, options.resume, options.label || 'Reset');
+      reflectStorageFailure(committed, options.label || 'Reset');
+      return committed;
+    }
+    pendingSave = null;
+    storageRecovered = false;
+    reflectStorageSuccess();
+    return committed;
+  }
+
+  function retryPendingSave() {
+    if (!pendingSave) {
+      if (recoveryRequiresReload) window.location.reload();
+      return;
+    }
+    const waiting = pendingSave;
+    ui.pendingRetryButton.disabled = true;
+    const retried = profileStorageController.retry(waiting.retryPayload);
+    if (!installProfileResult(retried)) {
+      if (retried.retryPayload) {
+        pendingSave = Object.freeze({ ...waiting, retryPayload: retried.retryPayload });
+      } else {
+        pendingSave = null;
+      }
+      reflectStorageFailure(retried, waiting.label);
+      ui.pendingRetryButton.disabled = false;
+      if (!pendingSave) {
+        if (retried.readOnly) {
+          showReloadRecovery(retried, waiting.label);
+        } else {
+          setOverlay(ui.saveRecoveryOverlay, false);
+          showToast('That save can no longer be applied safely. Existing browser progress was preserved.');
+        }
+      }
+      return;
+    }
+    pendingSave = null;
+    recoveryRequiresReload = false;
+    storageRecovered = false;
+    reflectStorageSuccess();
+    ui.pendingRetryButton.disabled = false;
+    ui.pendingRetryButton.querySelector('span').textContent = 'RETRY SAVE';
+    ui.pendingSessionButton.hidden = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.hidden = true;
+    ui.pendingReturnButton.disabled = true;
+    setOverlay(ui.saveRecoveryOverlay, false);
+    waiting.resume?.(retried);
+    announce(`${waiting.label} saved.`);
+  }
+
+  function continuePendingSessionOnly() {
+    if (!pendingSave?.allowSessionEscape) return;
+    const waiting = pendingSave;
+    ui.pendingRetryButton.disabled = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.disabled = true;
+    const abandoned = waiting.retryPayload
+      ? profileStorageController.abandon(waiting.retryPayload)
+      : { ok: true, code: 'abandoned-session' };
+    if (!abandoned?.ok || abandoned.code !== 'abandoned-session') {
+      ui.pendingRetryButton.disabled = false;
+      ui.pendingSessionButton.disabled = false;
+      ui.pendingReturnButton.disabled = !waiting.allowReturn;
+      ui.pendingSaveCopy.textContent = 'That pending save can no longer be released safely. Reload the Grove to preserve the browser profile.';
+      announce('The pending save could not be released safely.');
+      return;
+    }
+
+    const sessionResult = sessionProfileResult(
+      waiting.sessionProfile || profile,
+      { code: 'abandoned-session', state: 'session-read-only' }
+    );
+    if (!installProfileResult(sessionResult)) {
+      pendingSave = null;
+      recoveryRequiresReload = true;
+      showReloadRecovery(blockedSaveResult('invalid-session-profile', true), waiting.label);
+      return;
+    }
+
+    pendingSave = null;
+    recoveryRequiresReload = false;
+    storageReadOnly = true;
+    storageNotice = `${waiting.label} is active for this visit only. It was not saved to this device.`;
+    if (ui.profileStatus) ui.profileStatus.textContent = 'SESSION PROFILE · NOT SAVED';
+    updateStorageWarning();
+    ui.pendingRetryButton.disabled = false;
+    ui.pendingSessionButton.hidden = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.hidden = true;
+    ui.pendingReturnButton.disabled = true;
+    setOverlay(ui.saveRecoveryOverlay, false);
+    if (waiting.onSessionEscape) waiting.onSessionEscape(sessionResult);
+    else waiting.resume?.(sessionResult);
+    announce(`${waiting.label} is active for this visit only and was not saved.`);
+  }
+
+  function returnPendingWithoutSaving() {
+    if (!pendingSave?.allowReturn) return;
+    const waiting = pendingSave;
+    ui.pendingRetryButton.disabled = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.disabled = true;
+    const abandoned = waiting.retryPayload
+      ? profileStorageController.abandon(waiting.retryPayload)
+      : { ok: true, code: 'abandoned-session' };
+    if (!abandoned?.ok || abandoned.code !== 'abandoned-session') {
+      ui.pendingRetryButton.disabled = false;
+      ui.pendingSessionButton.disabled = !waiting.allowSessionEscape;
+      ui.pendingReturnButton.disabled = false;
+      ui.pendingSaveCopy.textContent = 'That pending save can no longer be released safely. Reload the Grove to preserve the browser profile.';
+      announce('The pending save could not be released safely.');
+      return;
+    }
+
+    const sessionResult = sessionProfileResult(
+      waiting.sessionProfile || profile,
+      { code: 'abandoned-session', state: 'session-read-only' }
+    );
+    if (!installProfileResult(sessionResult)) {
+      pendingSave = null;
+      recoveryRequiresReload = true;
+      showReloadRecovery(blockedSaveResult('invalid-session-profile', true), waiting.label);
+      return;
+    }
+
+    pendingSave = null;
+    recoveryRequiresReload = false;
+    storageReadOnly = true;
+    storageNotice = `${waiting.label} was not saved. Previously recorded Grove progress remains available for this visit.`;
+    if (ui.profileStatus) ui.profileStatus.textContent = 'SESSION PROFILE · NOT SAVED';
+    updateStorageWarning();
+    ui.pendingRetryButton.disabled = false;
+    ui.pendingSessionButton.hidden = true;
+    ui.pendingSessionButton.disabled = true;
+    ui.pendingReturnButton.hidden = true;
+    ui.pendingReturnButton.disabled = true;
+    setOverlay(ui.saveRecoveryOverlay, false);
+    waiting.onReturn?.(sessionResult);
+    announce(`${waiting.label} was left unsaved.`);
+  }
+
+  function refreshAfterDeferredStartup() {
+    ceremonyQueue = [];
+    currentCeremony = null;
+    resetVisitState();
+    clearScorePresentation();
+    enqueuePersistentRewards();
+    updateProfileUI();
+    buildSaplings();
+    rendererState.growthPulse = reducedMotion ? 0 : .8;
+    syncFirstBloomVisibility({ restart: true, focus: true });
+  }
+
+  function startProfileStorage() {
+    const startup = profileStorageController.inspectStartup({
+      standaloneBests: readStandaloneBests()
+    });
+    storageReadOnly = Boolean(startup.readOnly);
+    storageRecovered = Boolean(startup.recovered);
+
+    if (startup.code === 'future-profile' || startup.code === 'future-recovery-profile') {
+      storageNotice = storageFailureNotice(startup, 'Profile startup');
+    } else if (startup.code === 'storage-unavailable' || startup.code === 'no-valid-profile') {
+      storageNotice = storageFailureNotice(startup, 'Profile startup');
+    } else if (startup.recovered) {
+      storageNotice = 'The previous safe copy was recovered and verified. Export a backup before continuing.';
+    }
+
+    if (startup.readOnly) {
+      installProfileResult(sessionProfileResult(startup.profile || defaultProfile()));
+      storageAvailable = startup.code !== 'storage-unavailable';
+      if (ui.profileStatus) ui.profileStatus.textContent = startup.code.includes('future')
         ? 'NEWER SAVE PRESERVED · SESSION ONLY'
         : 'SESSION PROFILE · STORAGE UNAVAILABLE';
       updateStorageWarning();
-      return false;
+      return startup;
     }
-    try {
-      const previous = localStorage.getItem(STORAGE_KEY);
-      if (previous) {
-        try {
-          const parsed = JSON.parse(previous);
-          if (Number.isInteger(parsed?.version) && parsed.version <= PROFILE_VERSION) {
-            localStorage.setItem(BACKUP_STORAGE_KEY, previous);
-          }
-        } catch (_) { /* Never promote a damaged save into the recovery slot. */ }
+
+    if (!startup.installRequired) {
+      if (!installProfileResult(startup)) {
+        installProfileResult(sessionProfileResult(defaultProfile()));
+        storageReadOnly = true;
+        storageAvailable = false;
+        storageNotice = 'The local profile could not be installed safely. Reset is available for a fresh Grove.';
+        if (ui.profileStatus) ui.profileStatus.textContent = 'SESSION PROFILE · STORAGE UNAVAILABLE';
+        updateStorageWarning();
+        return blockedSaveResult('startup-install-failed', true);
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-      if (ui.profileStatus) ui.profileStatus.textContent = 'LOCAL KEEPER PROFILE · SAVED';
-      return true;
-    } catch (_) {
-      storageAvailable = false;
-      storageNotice = 'This browser stopped accepting local saves. Export your profile before leaving.';
-      if (ui.profileStatus) ui.profileStatus.textContent = 'SESSION PROFILE · STORAGE UNAVAILABLE';
-      updateStorageWarning();
-      return false;
+      storageAvailable = true;
+      reflectStorageSuccess();
+      return startup;
     }
+
+    const committed = profileStorageController.retry(startup.commitPayload);
+    if (!installProfileResult(committed)) {
+      rememberPendingSave(
+        committed,
+        refreshAfterDeferredStartup,
+        'Profile startup',
+        {
+          allowSessionEscape: true,
+          sessionProfile: startup.profile
+        }
+      );
+      reflectStorageFailure(committed, 'Profile startup');
+      installProfileResult(sessionProfileResult(defaultProfile()));
+      return committed;
+    }
+    storageAvailable = true;
+    storageReadOnly = false;
+    if (startup.recovered) {
+      storageRecovered = true;
+      storageNotice = 'The previous safe copy was recovered and verified. Export a backup before continuing.';
+    }
+    reflectStorageSuccess();
+    return committed;
   }
 
   function updateStorageWarning() {
     if (!ui.storageWarning) return;
     const directFile = location.protocol === 'file:';
-    const visible = directFile || !storageAvailable || storageReadOnly || storageRecovered;
+    const visible = directFile
+      || !storageAvailable
+      || storageReadOnly
+      || storageRecovered
+      || storageCleanupIncomplete
+      || Boolean(pendingSave);
     ui.storageWarning.classList.toggle('is-hidden', !visible);
     if (!visible) return;
     ui.storageWarningText.textContent = storageNotice || (directFile
       ? 'Direct-file saves vary by browser. Use PLAY MASTERY GROVE.cmd for one stable local save origin.'
       : 'Export a profile backup before clearing browser data or changing devices.');
+  }
+
+  function firstBloomNeeded() {
+    return profile?.livingArcade?.onboarding?.firstBloomCompleted === false;
+  }
+
+  function firstBloomInstruction(state = firstBloomState) {
+    if (!state) return 'Move';
+    if (state.phase === firstBloom.PHASES.MOVEMENT) return 'Move';
+    if (state.phase === firstBloom.PHASES.AWAKENING) return 'Awaken';
+    if (state.phase === firstBloom.PHASES.CLOSURE) return 'Close';
+    if (state.phase === firstBloom.PHASES.STITCH) {
+      return state.thread.length === 0 ? 'Begin' : 'Touch';
+    }
+    return 'Bloom';
+  }
+
+  function firstBloomSpokenInstruction(state = firstBloomState) {
+    if (!state) return 'Move the loomwing.';
+    if (state.phase === firstBloom.PHASES.MOVEMENT) return 'Move the loomwing.';
+    if (state.phase === firstBloom.PHASES.AWAKENING) return 'Three light flowers are waking.';
+    if (state.phase === firstBloom.PHASES.CLOSURE) {
+      return 'Return to the first flower to close the shape.';
+    }
+    if (state.phase === firstBloom.PHASES.STITCH) {
+      if (state.layout === 'easy-triangle' && state.thread.length === 0) {
+        return 'The flowers moved closer. Choose any flower to begin again.';
+      }
+      return state.thread.length === 0
+        ? 'Choose any flower to begin a thread.'
+        : 'Choose another glowing flower.';
+    }
+    return 'First Bloom is ready.';
+  }
+
+  function announceFirstBloom(previous, next) {
+    const key = [
+      next.phase,
+      next.thread.length,
+      next.closureFailures,
+      next.assist,
+      next.layout
+    ].join('|');
+    if (key === firstBloomLastAnnouncementKey) return;
+    firstBloomLastAnnouncementKey = key;
+    let message = firstBloomSpokenInstruction(next);
+    if (next.phase === firstBloom.PHASES.CLOSURE
+      && previous?.closureFailures !== next.closureFailures
+      && next.closureFailures > 0) {
+      message = next.closureFailures < 3
+        ? 'That flower does not close this shape. Return to the first flower.'
+        : firstBloomSpokenInstruction(next);
+    } else if (next.assist === 'strong' && previous?.assist !== 'strong') {
+      message = `${message} The brighter pulse shows what to try.`;
+    } else if (next.phase === firstBloom.PHASES.REVEAL) {
+      message = 'Saving First Bloom.';
+    }
+    ui.firstBloomLive.textContent = message;
+  }
+
+  function firstBloomPath(points, close = false) {
+    if (!Array.isArray(points) || points.length < 2) return '';
+    const commands = points.map((point, index) => (
+      `${index === 0 ? 'M' : 'L'} ${Math.round(point.x * 1000)} ${Math.round(point.y * 1000)}`
+    ));
+    if (close) commands.push('Z');
+    return commands.join(' ');
+  }
+
+  function renderFirstBloom() {
+    const state = firstBloomState;
+    if (!state) return;
+    const busy = firstBloomCompleting || firstBloomRevealCommitted;
+    const overlay = ui.firstBloomOverlay;
+    Object.values(firstBloom.PHASES).forEach((phase) => {
+      overlay.classList.remove(`phase-${phase}`);
+    });
+    overlay.classList.add(`phase-${state.phase}`);
+    overlay.classList.toggle('assist-strong', state.assist === 'strong');
+    overlay.classList.toggle('is-saving', firstBloomCompleting && !firstBloomRevealCommitted);
+    overlay.classList.toggle('is-revealing', firstBloomRevealCommitted);
+    overlay.classList.toggle('is-session-only', firstBloomSessionOnly);
+    overlay.dataset.reveal = firstBloomRevealCommitted
+      ? state.presentation.completionReveal
+      : 'none';
+
+    ui.firstBloomStage.dataset.phase = state.phase;
+    ui.firstBloomStage.dataset.cue = state.presentation.cue;
+    ui.firstBloomStage.dataset.cueStrength = state.presentation.cueStrength;
+    ui.firstBloomStage.setAttribute('aria-label', firstBloomSpokenInstruction(state));
+
+    ui.firstBloomLoomwing.style.left = `${state.loomwing.x * 100}%`;
+    ui.firstBloomLoomwing.style.top = `${state.loomwing.y * 100}%`;
+    ui.firstBloomLoomwing.style.setProperty('--loom-x', String(state.loomwing.x));
+    ui.firstBloomLoomwing.style.setProperty('--loom-y', String(state.loomwing.y));
+
+    const selectedFlowers = state.thread
+      .map((flowerId) => state.flowers.find((flower) => flower.id === flowerId))
+      .filter(Boolean);
+    let threadPoints = selectedFlowers;
+    if (selectedFlowers.length === 1 && !firstBloomRevealCommitted) {
+      threadPoints = [state.loomwing, selectedFlowers[0]];
+    } else if (firstBloomRevealCommitted
+      && state.outcome?.method === 'played'
+      && selectedFlowers.length === state.flowers.length) {
+      threadPoints = [...selectedFlowers, selectedFlowers[0]];
+    }
+    ui.firstBloomThreadPath.setAttribute('d', firstBloomPath(threadPoints));
+
+    let cueTarget = state.loomwing;
+    if (state.presentation.cue === 'begin-thread') {
+      cueTarget = state.flowers[0];
+    } else if (state.presentation.cue === 'touch-flower') {
+      cueTarget = state.flowers.find((flower) => !state.thread.includes(flower.id))
+        || state.flowers[0];
+    } else if (state.presentation.cue === 'close-shape') {
+      cueTarget = state.flowers.find((flower) => flower.id === state.thread[0])
+        || state.flowers[0];
+    }
+    ui.firstBloomCue.style.left = `${cueTarget.x * 100}%`;
+    ui.firstBloomCue.style.top = `${cueTarget.y * 100}%`;
+    const closureStart = state.flowers.find((flower) => flower.id === state.thread[0]);
+    const closureEnd = state.flowers.find(
+      (flower) => flower.id === state.thread[state.thread.length - 1]
+    );
+    ui.firstBloomCuePath.setAttribute(
+      'd',
+      state.phase === firstBloom.PHASES.CLOSURE && closureStart && closureEnd
+        ? firstBloomPath([closureEnd, closureStart])
+        : ''
+    );
+
+    state.flowers.forEach((flower, index) => {
+      const button = ui.firstBloomFlowerButtons[index];
+      const threaded = state.thread.includes(flower.id);
+      const threadStart = state.thread[0] === flower.id;
+      const closureTarget = state.phase === firstBloom.PHASES.CLOSURE && threadStart;
+      const nextTouch = state.phase === firstBloom.PHASES.STITCH
+        && flower.awake
+        && !threaded;
+      const beginCue = state.phase === firstBloom.PHASES.STITCH
+        && state.thread.length === 0
+        && flower.awake;
+      button.style.left = `${flower.x * 100}%`;
+      button.style.top = `${flower.y * 100}%`;
+      button.classList.toggle('awake', flower.awake);
+      button.classList.toggle('threaded', threaded);
+      button.classList.toggle('thread-start', threadStart);
+      button.classList.toggle('closure-target', closureTarget);
+      button.classList.toggle('is-cued', beginCue || nextTouch || closureTarget);
+      button.disabled = !flower.awake || busy;
+      button.setAttribute(
+        'aria-label',
+        `Light flower ${index + 1}${threaded ? ', threaded' : ''}${closureTarget ? ', close the shape here' : ''}`
+      );
+    });
+
+    ui.firstBloomHint.textContent = firstBloomInstruction(state);
+    ui.firstBloomSaveStatus.textContent = firstBloomRevealCommitted
+      ? firstBloomSessionOnly ? 'THIS VISIT · NOT SAVED' : 'SAVED'
+      : firstBloomCompleting
+        ? 'SAVING'
+        : storageReadOnly ? 'THIS VISIT · NOT SAVED' : 'LOCAL SAVE';
+    ui.firstBloomSkipButton.disabled = busy;
+    ui.firstBloomDirectionButtons.forEach((button) => { button.disabled = busy; });
+    ui.firstBloomTreeReveal.setAttribute('aria-hidden', 'true');
+  }
+
+  function tickFirstBloom() {
+    firstBloomTickTimer = 0;
+    const now = performance.now();
+    const elapsed = Math.max(1, Math.min(250, Math.round(now - firstBloomLastTickAt)));
+    firstBloomLastTickAt = now;
+    if (document.hidden
+      || !ui.firstBloomOverlay.classList.contains('is-visible')
+      || ui.firstBloomOverlay.inert
+      || firstBloomCompleting
+      || !firstBloomState
+      || firstBloomState.phase === firstBloom.PHASES.REVEAL) return;
+    dispatchFirstBloom({
+      type: firstBloom.ACTIONS.ELAPSE,
+      deltaMs: elapsed
+    });
+    if (!document.hidden
+      && ui.firstBloomOverlay.classList.contains('is-visible')
+      && !ui.firstBloomOverlay.inert
+      && !firstBloomCompleting
+      && !firstBloomRevealCommitted) {
+      firstBloomTickTimer = window.setTimeout(tickFirstBloom, 100);
+    }
+  }
+
+  function startFirstBloomTicker() {
+    if (firstBloomTickTimer) window.clearTimeout(firstBloomTickTimer);
+    firstBloomLastTickAt = performance.now();
+    firstBloomTickTimer = window.setTimeout(tickFirstBloom, 100);
+  }
+
+  function pauseFirstBloomActivity() {
+    if (firstBloomTickTimer) window.clearTimeout(firstBloomTickTimer);
+    if (firstBloomPointerFrame) cancelAnimationFrame(firstBloomPointerFrame);
+    if (firstBloomPointerId !== null) {
+      try { ui.firstBloomStage.releasePointerCapture(firstBloomPointerId); }
+      catch (_) { /* Pointer capture may already have ended. */ }
+    }
+    firstBloomTickTimer = 0;
+    firstBloomPointerFrame = 0;
+    firstBloomPointerId = null;
+    firstBloomPointerPosition = null;
+    firstBloomLastTickAt = 0;
+  }
+
+  function stopFirstBloom() {
+    firstBloomGeneration += 1;
+    pauseFirstBloomActivity();
+    if (firstBloomRevealTimer) window.clearTimeout(firstBloomRevealTimer);
+    firstBloomRevealTimer = 0;
+  }
+
+  function dismissFirstBloomReveal(revealGeneration) {
+    if (revealGeneration !== firstBloomGeneration || !firstBloomRevealCommitted) return false;
+    firstBloomRevealTimer = 0;
+    if (document.hidden) return false;
+    setOverlay(ui.firstBloomOverlay, false);
+    stopFirstBloom();
+    window.scrollTo(0, 0);
+    if (ceremonyQueue.length) {
+      showNextCeremony();
+    } else {
+      focusGamePlayControl('lumenloom');
+    }
+    return true;
+  }
+
+  function finishFirstBloomReveal(method, commitResult = null) {
+    if (firstBloomRevealCommitted) return;
+    firstBloomRevealCommitted = true;
+    firstBloomCompleting = false;
+    firstBloomSessionOnly = commitResult?.saved === false
+      || commitResult?.code === 'session-only';
+    renderFirstBloom();
+    ui.firstBloomLive.textContent = firstBloomSessionOnly
+      ? 'First Bloom complete for this visit. Local saving is unavailable.'
+      : method === 'skipped'
+        ? 'First Bloom skipped. The Lantern Willow is ready.'
+        : 'First Bloom complete. The Lantern Willow is ready.';
+    updateProfileUI();
+    buildSaplings();
+    rendererState.growthPulse = reducedMotion ? 0 : 1;
+    rendererState.growthPulseColor = '#a7ffda';
+
+    // Motion preference changes the animation, not the amount of time the
+    // player or assistive technology has to understand the committed result.
+    const revealDuration = method === 'skipped' ? 900 : 1280;
+    const revealGeneration = firstBloomGeneration;
+    firstBloomRevealTimer = window.setTimeout(() => {
+      dismissFirstBloomReveal(revealGeneration);
+    }, revealDuration);
+  }
+
+  function completeFirstBloom(method) {
+    if (firstBloomCompleting || firstBloomRevealCommitted) return;
+    firstBloomCompleting = true;
+    renderFirstBloom();
+    const completed = progression.completeFirstBloom(profile);
+    if (!completed.ok && completed.code !== 'already-complete') {
+      firstBloomCompleting = false;
+      renderFirstBloom();
+      ui.firstBloomLive.textContent = 'First Bloom could not be completed safely.';
+      return;
+    }
+    if (completed.code === 'already-complete') {
+      finishFirstBloomReveal(method, { ok: true, code: 'already-complete', saved: true });
+      return;
+    }
+    const committed = commitProfile(completed.profile, {
+      label: 'First Bloom',
+      allowSessionOnly: true,
+      allowSessionEscape: true,
+      sessionProfile: completed.profile,
+      resume: (result) => finishFirstBloomReveal(method, result)
+    });
+    if (!committed.ok) {
+      renderFirstBloom();
+      return;
+    }
+    finishFirstBloomReveal(method, committed);
+  }
+
+  function dispatchFirstBloom(action) {
+    if (!firstBloomState || firstBloomRevealCommitted) return firstBloomState;
+    const previous = firstBloomState;
+    const next = firstBloom.reduce(previous, action);
+    if (next === previous) return previous;
+    firstBloomState = next;
+    renderFirstBloom();
+    announceFirstBloom(previous, next);
+    if (firstBloom.isComplete(next)) {
+      completeFirstBloom(next.outcome.method);
+    }
+    return next;
+  }
+
+  function startFirstBloom(options = {}) {
+    stopFirstBloom();
+    const startGeneration = firstBloomGeneration;
+    firstBloomState = firstBloom.createInitialState({ reducedMotion });
+    firstBloomCompleting = false;
+    firstBloomRevealCommitted = false;
+    firstBloomSessionOnly = false;
+    firstBloomLastAnnouncementKey = '';
+    renderFirstBloom();
+    setOverlay(ui.firstBloomOverlay, true);
+    startFirstBloomTicker();
+    announceFirstBloom(null, firstBloomState);
+    if (options.focus !== false) {
+      window.setTimeout(() => {
+        if (startGeneration === firstBloomGeneration
+          && !ui.firstBloomOverlay.inert
+          && ui.firstBloomOverlay.classList.contains('is-visible')) {
+          ui.firstBloomStage.focus({ preventScroll: true });
+        }
+      }, 80);
+    }
+  }
+
+  function syncFirstBloomVisibility(options = {}) {
+    if (firstBloomNeeded()) {
+      if (options.restart || !firstBloomState || firstBloomRevealCommitted) {
+        startFirstBloom(options);
+      } else {
+        setOverlay(ui.firstBloomOverlay, true);
+        startFirstBloomTicker();
+      }
+      return true;
+    }
+    stopFirstBloom();
+    setOverlay(ui.firstBloomOverlay, false);
+    if (options.focus) {
+      window.setTimeout(() => {
+        focusGamePlayControl('lumenloom');
+      }, 80);
+    }
+    return false;
+  }
+
+  function moveFirstBloomBy(deltaX, deltaY) {
+    if (!firstBloomState || firstBloomCompleting || firstBloomRevealCommitted) return;
+    dispatchFirstBloom({
+      type: firstBloom.ACTIONS.MOVE,
+      x: firstBloomState.loomwing.x + deltaX,
+      y: firstBloomState.loomwing.y + deltaY
+    });
+  }
+
+  function firstBloomPointFromEvent(event) {
+    const bounds = ui.firstBloomStage.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+    return {
+      x: (event.clientX - bounds.left) / bounds.width,
+      y: (event.clientY - bounds.top) / bounds.height
+    };
+  }
+
+  function queueFirstBloomPointer(event) {
+    const point = firstBloomPointFromEvent(event);
+    if (!point) return;
+    const pointerGeneration = firstBloomGeneration;
+    firstBloomPointerPosition = point;
+    if (firstBloomPointerFrame) return;
+    firstBloomPointerFrame = requestAnimationFrame(() => {
+      firstBloomPointerFrame = 0;
+      const nextPoint = firstBloomPointerPosition;
+      firstBloomPointerPosition = null;
+      if (!nextPoint
+        || pointerGeneration !== firstBloomGeneration
+        || ui.firstBloomOverlay.inert
+        || document.hidden) return;
+      dispatchFirstBloom({
+        type: firstBloom.ACTIONS.MOVE,
+        x: nextPoint.x,
+        y: nextPoint.y
+      });
+    });
+  }
+
+  function releaseFirstBloomPointer(event) {
+    if (event.pointerId !== firstBloomPointerId) return;
+    if (event.type === 'pointerup') {
+      // Keep the final queued position; capture releases automatically.
+      firstBloomPointerId = null;
+      return;
+    }
+    if (firstBloomPointerFrame) cancelAnimationFrame(firstBloomPointerFrame);
+    firstBloomPointerFrame = 0;
+    firstBloomPointerPosition = null;
+    try { ui.firstBloomStage.releasePointerCapture(event.pointerId); }
+    catch (_) { /* Pointer capture may already have ended. */ }
+    firstBloomPointerId = null;
+  }
+
+  function handleFirstBloomKeydown(event) {
+    if (!ui.firstBloomOverlay.classList.contains('is-visible')
+      || firstBloomCompleting
+      || firstBloomRevealCommitted
+      || event.target !== ui.firstBloomStage
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey) return;
+    const step = event.shiftKey ? .11 : .065;
+    const movement = {
+      ArrowUp: [0, -step],
+      w: [0, -step],
+      ArrowLeft: [-step, 0],
+      a: [-step, 0],
+      ArrowRight: [step, 0],
+      d: [step, 0],
+      ArrowDown: [0, step],
+      s: [0, step]
+    }[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+    if (!movement) return;
+    event.preventDefault();
+    moveFirstBloomBy(movement[0], movement[1]);
+  }
+
+  function installFirstBloomControls() {
+    ui.firstBloomOverlay.addEventListener('pointerdown', (event) => {
+      if (firstBloomPointerId !== null
+        && event.pointerId !== firstBloomPointerId
+        && event.target.closest?.('button')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }, { capture: true });
+    ui.firstBloomStage.addEventListener('pointerdown', (event) => {
+      if (firstBloomCompleting
+        || firstBloomRevealCommitted
+        || firstBloomPointerId !== null
+        || event.target.closest?.('button')
+        || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      event.preventDefault();
+      firstBloomPointerId = event.pointerId;
+      try { ui.firstBloomStage.setPointerCapture(event.pointerId); }
+      catch (_) { /* Movement still works when pointer capture is unavailable. */ }
+      queueFirstBloomPointer(event);
+    });
+    ui.firstBloomStage.addEventListener('pointermove', (event) => {
+      const mouseHover = event.pointerType === 'mouse'
+        && firstBloomPointerId === null
+        && event.buttons === 0
+        && !event.target.closest?.('button');
+      if (!mouseHover && event.pointerId !== firstBloomPointerId) return;
+      event.preventDefault();
+      queueFirstBloomPointer(event);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => {
+      ui.firstBloomStage.addEventListener(type, releaseFirstBloomPointer);
+    });
+    ui.firstBloomOverlay.addEventListener('keydown', handleFirstBloomKeydown);
+    ui.firstBloomFlowerButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const flowerId = button.dataset.firstBloomFlower;
+        dispatchFirstBloom({
+          type: firstBloomState?.phase === firstBloom.PHASES.CLOSURE
+            ? firstBloom.ACTIONS.CLOSE
+            : firstBloom.ACTIONS.STITCH,
+          flowerId
+        });
+      });
+    });
+    ui.firstBloomDirectionButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        moveFirstBloomBy(
+          Number(button.dataset.dx),
+          Number(button.dataset.dy)
+        );
+      });
+    });
+    ui.firstBloomSkipButton.addEventListener('click', () => {
+      dispatchFirstBloom({ type: firstBloom.ACTIONS.SKIP });
+    });
+  }
+
+  function handleFirstBloomVisibilityChange() {
+    if (document.hidden) {
+      pauseFirstBloomActivity();
+    } else if (firstBloomRevealCommitted
+      && !firstBloomRevealTimer
+      && ui.firstBloomOverlay.classList.contains('is-visible')) {
+      dismissFirstBloomReveal(firstBloomGeneration);
+    } else if (ui.firstBloomOverlay.classList.contains('is-visible')
+      && !ui.firstBloomOverlay.inert
+      && !firstBloomCompleting
+      && !firstBloomRevealCommitted) {
+      startFirstBloomTicker();
+    }
+    restartRenderer(!document.hidden && !document.body.classList.contains('modal-open'));
   }
 
   function growthFor(gameId, score = profile.games[gameId].totalScore) {
@@ -661,6 +1597,509 @@
 
   function formatNumber(value) {
     return safeInteger(value).toLocaleString('en-US');
+  }
+
+  function carouselModeUnlockLabel(modeId) {
+    if (modeId === 'petalRush') return 'First Bloom';
+    if (modeId === 'shiftingConstellation') return 'Silver';
+    if (modeId === 'hollowRush') return 'Gold';
+    return 'always';
+  }
+
+  function carouselGateLabel(entry, view, seedCount) {
+    if (!entry?.implemented) return 'NOT YET ANNOUNCED';
+    if (view.unlocked) return view.reward?.growthLabel || 'TREE IN FULL BLOOM';
+    if (entry.gameId === 'prismbind') return `${seedCount} / 3 MASTERY SEEDS`;
+    if (entry.gameId === 'mothchorus') return 'DEFEAT PRISMBIND';
+    return view.reward?.skillLabel || 'TREE SLEEPING';
+  }
+
+  function announceCarousel(message) {
+    if (!ui.livingCarouselLive) return;
+    ui.livingCarouselLive.textContent = '';
+    window.setTimeout(() => {
+      if (ui.livingCarouselLive) ui.livingCarouselLive.textContent = message;
+    }, 20);
+  }
+
+  function setCarouselFallbackSurface(surface, carouselIsPrimary) {
+    if (!surface) return;
+    surface.hidden = carouselIsPrimary;
+    surface.inert = carouselIsPrimary;
+    surface.setAttribute('aria-hidden', String(carouselIsPrimary));
+  }
+
+  function deactivateLivingCarousel() {
+    if (!ui.livingCarousel) return;
+    ui.livingCarousel.hidden = true;
+    ui.livingCarousel.inert = true;
+    ui.livingCarousel.setAttribute('aria-hidden', 'true');
+    ui.livingCarousel.dataset.carouselState = 'fallback';
+    delete ui.groveScreen.dataset.carouselActive;
+    [ui.legacyCatalogue, ui.sleepingGrove, ui.groveFooter]
+      .forEach((surface) => setCarouselFallbackSurface(surface, false));
+    carouselActive = false;
+  }
+
+  function activateLivingCarousel() {
+    if (carouselActive || !ui.livingCarousel) return;
+    ui.livingCarousel.hidden = false;
+    ui.livingCarousel.inert = false;
+    ui.livingCarousel.setAttribute('aria-hidden', 'false');
+    ui.livingCarousel.dataset.carouselState = 'active';
+    ui.groveScreen.dataset.carouselActive = 'true';
+    [ui.legacyCatalogue, ui.sleepingGrove, ui.groveFooter]
+      .forEach((surface) => setCarouselFallbackSurface(surface, true));
+    carouselActive = true;
+  }
+
+  function renderLivingCarousel() {
+    if (carouselFailed) return false;
+    if (!carousel || !carouselDependencies || !ui.livingCarousel) {
+      carouselFailed = true;
+      deactivateLivingCarousel();
+      return false;
+    }
+
+    try {
+      if (!carouselState) carouselState = carousel.createInitialState();
+      const carouselView = carousel.deriveView(
+        carouselState,
+        profile,
+        carouselDependencies,
+        { viewportWidth: window.innerWidth }
+      );
+      const entry = carouselView.selected;
+      const positionLabel = String(entry.position).padStart(2, '0');
+      const sleeping = !entry.implemented;
+      const seedCount = FOUNDATIONAL_GAME_IDS.filter(
+        (gameId) => profile.games[gameId].masterySeed
+      ).length;
+      const marks = combinedMarks();
+      const rank = groveRankFor(marks);
+      const gameTitle = sleeping ? `SLEEPING TREE ${positionLabel}` : entry.title;
+      const species = sleeping ? 'NO GAME ANNOUNCED' : entry.tree;
+      const stage = sleeping ? 'SLEEPING' : carouselView.stage;
+      const accent = entry.color || '#8f91a8';
+      const accentSoft = /^#[0-9a-f]{6}$/i.test(accent) ? `${accent}2e` : 'rgba(143, 145, 168, .18)';
+      const target = carouselGateLabel(entry, carouselView, seedCount);
+      const modeSuffix = entry.gameId === 'lumenloom'
+        ? ` ${carouselView.modeName || 'Night Garden'}`
+        : '';
+
+      ui.livingCarousel.dataset.carouselPosition = String(entry.position);
+      ui.livingCarousel.style.setProperty('--carousel-accent', accent);
+      ui.livingCarousel.style.setProperty('--carousel-accent-soft', accentSoft);
+      ui.livingCarouselNumber.textContent = entry.number || `TREE ${positionLabel}`;
+      ui.livingCarouselGame.textContent = gameTitle;
+      ui.livingCarouselSpecies.textContent = species;
+      ui.livingCarouselRank.textContent = rank.name;
+      ui.livingCarouselRank.setAttribute('aria-label', `Grove rank ${rank.name}`);
+      ui.livingCarouselSeeds.textContent = `${seedCount} / 3 SEEDS`;
+      ui.livingCarouselSeeds.setAttribute(
+        'aria-label',
+        `${seedCount} of three foundational Mastery Seeds earned`
+      );
+      ui.livingCarouselStage.dataset.growthStage = stage.toLowerCase().replace(/\s+/g, '-');
+      ui.livingCarouselGrowthStage.textContent = stage;
+      ui.livingCarouselTreeSymbol.textContent = entry.symbol || '•';
+      ui.livingCarouselTreeVisual.setAttribute(
+        'aria-label',
+        sleeping
+          ? `Sleeping Tree ${positionLabel}. No game has been announced.`
+          : carouselView.unlocked
+            ? `${entry.tree} at ${stage} growth.`
+            : `${entry.tree} is sleeping. ${target}.`
+      );
+      ui.livingCarouselBest.textContent = formatNumber(carouselView.best.display);
+      ui.livingCarouselBest.title = carouselView.best.assisted > carouselView.best.standard
+        ? `Standard best ${formatNumber(carouselView.best.standard)}; assisted best ${formatNumber(carouselView.best.assisted)}`
+        : `Standard-play best ${formatNumber(carouselView.best.standard)}`;
+      ui.livingCarouselTarget.textContent = target;
+      ui.livingCarouselTarget.title = carouselView.reward?.skillLabel || target;
+
+      const modeAvailable = lumenloomModes.MODE_IDS.filter(
+        (modeId) => progression.isLumenloomModeAvailable(profile, modeId)
+      );
+      const showModes = entry.gameId === 'lumenloom' && modeAvailable.length > 1;
+      ui.livingCarouselModes.hidden = !showModes;
+      ui.livingCarouselModes.inert = !showModes;
+      ui.livingCarouselModes.setAttribute('aria-hidden', String(!showModes));
+      ui.livingCarouselModeButtons.forEach((button) => {
+        const modeId = button.dataset.carouselMode;
+        const mode = lumenloomModes.MODES[modeId];
+        const available = progression.isLumenloomModeAvailable(profile, modeId);
+        const selected = showModes && modeId === carouselView.modeId;
+        const unlockLabel = carouselModeUnlockLabel(modeId);
+        button.classList.toggle('is-selected', selected);
+        button.classList.toggle('is-locked', !available);
+        button.setAttribute('aria-checked', String(selected));
+        button.setAttribute('aria-disabled', String(!available));
+        button.setAttribute(
+          'aria-label',
+          available
+            ? `${mode.name}, ${mode.bloom} mode${selected ? ', selected' : ''}`
+            : `${mode.name}, locked until ${unlockLabel}`
+        );
+        button.tabIndex = selected ? 0 : -1;
+      });
+
+      const playLabel = carouselView.playable
+        ? `PLAY${modeSuffix}`
+        : sleeping ? 'SLEEPING' : 'LOCKED';
+      ui.livingCarouselPlayButton.querySelector('span').textContent = playLabel;
+      ui.livingCarouselPlayButton.setAttribute('aria-disabled', String(!carouselView.playable));
+      ui.livingCarouselPlayButton.setAttribute(
+        'aria-label',
+        carouselView.playable
+          ? `Play${modeSuffix} in ${entry.title}`
+          : sleeping
+            ? `Sleeping Tree ${positionLabel}. No game has been announced.`
+            : `${entry.title} locked. ${target}.`
+      );
+
+      const trialAvailable = carouselView.trialAvailable;
+      ui.livingCarouselTrialButton.hidden = !trialAvailable;
+      ui.livingCarouselTrialButton.inert = !trialAvailable;
+      ui.livingCarouselTrialButton.setAttribute('aria-hidden', String(!trialAvailable));
+      ui.livingCarouselTrialButton.setAttribute('aria-disabled', String(!trialAvailable));
+      ui.livingCarouselTrialStatus.textContent = profile.trialsCompleted > 0
+        ? `BEST ${formatNumber(profile.trialBest)}`
+        : 'READY';
+      ui.livingCarouselTrialButton.setAttribute(
+        'aria-label',
+        trialAvailable
+          ? profile.trialsCompleted > 0
+            ? `Begin Threefold Trial. Best score ${formatNumber(profile.trialBest)}.`
+            : 'Begin Threefold Trial.'
+          : 'Threefold Trial locked. Complete Lumenloom, Bloomfold, and Ripplewake.'
+      );
+      ui.livingCarouselHarmony.parentElement?.classList.toggle('is-trial-hidden', !trialAvailable);
+
+      const visitCount = FOUNDATIONAL_GAME_IDS.filter((gameId) => visitState.played.has(gameId)).length;
+      ui.livingCarouselHarmonyPips.textContent = FOUNDATIONAL_GAME_IDS
+        .map((gameId) => visitState.played.has(gameId) ? '●' : '○')
+        .join(' ');
+      ui.livingCarouselHarmony.setAttribute(
+        'aria-label',
+        `Visit Harmony, ${visitCount} of three foundational trees played`
+      );
+
+      ui.livingCarouselRail.dataset.carouselPage = String(carouselState.rail.page);
+      carouselView.rail.forEach((item, index) => {
+        const option = ui.livingCarouselTreeOptions[index];
+        const candidate = carousel.REGISTRY[index];
+        if (!option || !candidate) return;
+        option.hidden = !item.visible;
+        option.inert = !item.visible;
+        option.setAttribute('aria-hidden', String(!item.visible));
+        option.setAttribute('aria-selected', String(item.selected));
+        option.setAttribute('aria-posinset', String(item.position));
+        option.setAttribute('aria-setsize', String(carousel.POSITION_COUNT));
+        option.tabIndex = item.visible && item.roving ? 0 : -1;
+        option.classList.toggle('is-selected', item.selected);
+        option.classList.toggle('is-locked', item.implemented && !item.unlocked);
+        option.classList.toggle('is-sleeping', !item.implemented);
+        option.removeAttribute('aria-disabled');
+        const candidateView = item.implemented
+          ? carousel.deriveView(
+            carousel.selectPosition(carouselState, item.position),
+            profile,
+            carouselDependencies,
+            { viewportWidth: window.innerWidth }
+          )
+          : null;
+        const candidateGate = candidateView
+          ? carouselGateLabel(candidate, candidateView, seedCount)
+          : 'NOT YET ANNOUNCED';
+        option.setAttribute(
+          'aria-label',
+          !item.implemented
+            ? `Sleeping Tree ${String(item.position).padStart(2, '0')}. No game announced.`
+            : item.unlocked
+              ? `${candidate.accessibleLabel}. ${candidateView.stage} growth.`
+              : `${candidate.accessibleLabel}. Locked. ${candidateGate}.`
+        );
+      });
+
+      const paged = carouselView.viewport.pageCount > 1;
+      ui.livingCarouselPageDots.hidden = !paged;
+      ui.livingCarouselPageDots.inert = !paged;
+      ui.livingCarouselPageDots.setAttribute('aria-hidden', String(!paged));
+      ui.livingCarouselPageButtons.forEach((button) => {
+        const page = Number(button.dataset.carouselPageButton);
+        button.setAttribute('aria-pressed', String(page === carouselView.viewport.page));
+        button.tabIndex = paged ? 0 : -1;
+      });
+
+      rendererState.growthPulseColor = accent;
+      activateLivingCarousel();
+      return true;
+    } catch (error) {
+      carouselFailed = true;
+      deactivateLivingCarousel();
+      console.error('Living Carousel stayed on its safe catalogue fallback.', error);
+      return false;
+    }
+  }
+
+  function currentCarouselView() {
+    if (!carouselState || !carousel || !carouselDependencies) return null;
+    try {
+      return carousel.deriveView(
+        carouselState,
+        profile,
+        carouselDependencies,
+        { viewportWidth: window.innerWidth }
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function carouselSelectionAnnouncement(carouselView) {
+    if (!carouselView) return 'The selected tree could not be inspected.';
+    const entry = carouselView.selected;
+    if (!entry.implemented) {
+      return `Sleeping Tree ${String(entry.position).padStart(2, '0')}. No game has been announced.`;
+    }
+    if (!carouselView.unlocked) {
+      const seedCount = FOUNDATIONAL_GAME_IDS.filter(
+        (gameId) => profile.games[gameId].masterySeed
+      ).length;
+      return `${entry.title} is locked. ${carouselGateLabel(entry, carouselView, seedCount)}.`;
+    }
+    const mode = entry.gameId === 'lumenloom' && carouselView.modeName
+      ? ` ${carouselView.modeName} selected.`
+      : '';
+    return `${entry.title}. ${carouselView.stage} growth. Best ${formatNumber(carouselView.best.display)}.${mode}`;
+  }
+
+  function focusCarouselTree(position) {
+    const option = ui.livingCarouselTreeOptions[position - 1];
+    if (option && !option.hidden) option.focus({ preventScroll: true });
+  }
+
+  function selectCarouselPosition(position, options = {}) {
+    if (!carouselState || !carousel) return false;
+    const previousPosition = carouselState.selectedPosition;
+    carouselState = carousel.selectPosition(carouselState, position);
+    if (!renderLivingCarousel()) return false;
+    const selected = currentCarouselView();
+    if (options.announce !== false) announceCarousel(carouselSelectionAnnouncement(selected));
+    if (previousPosition !== carouselState.selectedPosition && selected?.selected.gameId) {
+      playTreeVoice(selected.selected.gameId, 'select');
+    }
+    if (options.focus) focusCarouselTree(carouselState.rail.rovingPosition);
+    return previousPosition !== carouselState.selectedPosition;
+  }
+
+  function moveCarouselFromRoving(direction, options = {}) {
+    if (!carouselState || !carousel || !Number.isFinite(direction) || direction === 0) return;
+    const nextPosition = Math.min(
+      carousel.POSITION_COUNT,
+      Math.max(1, carouselState.rail.rovingPosition + (direction < 0 ? -1 : 1))
+    );
+    selectCarouselPosition(nextPosition, {
+      announce: options.announce !== false,
+      focus: options.focus !== false
+    });
+  }
+
+  function showCarouselPage(page, options = {}) {
+    if (!carouselState || !carousel) return;
+    carouselState = carousel.setPage(carouselState, page);
+    if (!renderLivingCarousel()) return;
+    if (options.announce !== false) {
+      const first = carouselState.rail.page * carousel.MOBILE_PAGE_SIZE + 1;
+      announceCarousel(`Showing Trees ${String(first).padStart(2, '0')} through ${String(first + 4).padStart(2, '0')}.`);
+    }
+    if (options.focus !== false) focusCarouselTree(carouselState.rail.rovingPosition);
+  }
+
+  function chooseCarouselMode(modeId, options = {}) {
+    if (!carouselState || !carousel || !lumenloomModes?.MODE_IDS.includes(modeId)) return false;
+    if (!progression.isLumenloomModeAvailable(profile, modeId)) {
+      const mode = lumenloomModes.MODES[modeId];
+      announceCarousel(`${mode.name} is locked until ${carouselModeUnlockLabel(modeId)}.`);
+      showToast(`${mode.name} awakens at ${carouselModeUnlockLabel(modeId)}.`);
+      return false;
+    }
+    carouselState = carousel.selectMode(carouselState, 'lumenloom', modeId, lumenloomModes);
+    if (!renderLivingCarousel()) return false;
+    if (options.announce !== false) {
+      announceCarousel(`${lumenloomModes.MODES[modeId].name} selected.`);
+    }
+    if (options.focus) {
+      ui.livingCarouselModeButtons
+        .find((button) => button.dataset.carouselMode === modeId)
+        ?.focus({ preventScroll: true });
+    }
+    return true;
+  }
+
+  function moveCarouselMode(modeId, direction) {
+    const available = lumenloomModes.MODE_IDS.filter(
+      (candidate) => progression.isLumenloomModeAvailable(profile, candidate)
+    );
+    if (!available.length) return;
+    const currentIndex = Math.max(0, available.indexOf(modeId));
+    const nextIndex = (currentIndex + (direction < 0 ? -1 : 1) + available.length) % available.length;
+    chooseCarouselMode(available[nextIndex], { focus: true });
+  }
+
+  function launchCarouselSelection() {
+    if (!carouselState || !carousel || !carouselDependencies) return;
+    const intent = carousel.launchIntent(carouselState, profile, carouselDependencies);
+    if (!intent) {
+      const carouselView = currentCarouselView();
+      announceCarousel(carouselSelectionAnnouncement(carouselView));
+      showToast(carouselView?.implemented
+        ? 'That tree is still sleeping. Inspect its Target to see the gate.'
+        : 'That sleeping tree has not been announced yet.');
+      return;
+    }
+    trialSession = null;
+    openGame(intent.gameId, { modeId: intent.modeId });
+  }
+
+  function beginCarouselPointer(event) {
+    if (!carouselActive || carouselPointer || event.isPrimary === false) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    carouselPointer = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      endX: event.clientX,
+      endY: event.clientY,
+      cancelled: false,
+      captureTarget: event.currentTarget
+    };
+    try { event.currentTarget.setPointerCapture(event.pointerId); }
+    catch (_) { /* Pointer capture is an enhancement, not an input requirement. */ }
+  }
+
+  function moveCarouselPointer(event) {
+    if (!carouselPointer || event.pointerId !== carouselPointer.id) return;
+    carouselPointer.endX = event.clientX;
+    carouselPointer.endY = event.clientY;
+    const horizontal = Math.abs(carouselPointer.endX - carouselPointer.startX);
+    const vertical = Math.abs(carouselPointer.endY - carouselPointer.startY);
+    if (vertical >= carousel.SWIPE_THRESHOLD_PX && vertical > horizontal) {
+      carouselPointer.cancelled = true;
+    }
+  }
+
+  function endCarouselPointer(event) {
+    if (!carouselPointer || event.pointerId !== carouselPointer.id) return;
+    const gesture = carouselPointer;
+    carouselPointer = null;
+    try {
+      if (gesture.captureTarget.hasPointerCapture(event.pointerId)) {
+        gesture.captureTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch (_) { /* Capture may already have ended. */ }
+    if (event.type === 'pointercancel' || gesture.cancelled) return;
+    gesture.endX = event.clientX;
+    gesture.endY = event.clientY;
+    const direction = carousel.interpretSwipe(gesture);
+    if (!direction) return;
+    carouselSuppressClickUntil = Date.now() + 450;
+    event.preventDefault();
+    const nextState = carousel.moveSelection(carouselState, direction);
+    if (nextState === carouselState) return;
+    carouselState = nextState;
+    renderLivingCarousel();
+    const selected = currentCarouselView();
+    announceCarousel(carouselSelectionAnnouncement(selected));
+    if (selected?.selected.gameId) playTreeVoice(selected.selected.gameId, 'select');
+  }
+
+  function installLivingCarouselControls() {
+    if (!ui.livingCarousel || !carousel || !carouselDependencies) return;
+
+    ui.livingCarousel.addEventListener('click', (event) => {
+      if (Date.now() >= carouselSuppressClickUntil) return;
+      carouselSuppressClickUntil = 0;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+
+    ui.livingCarouselTreeOptions.forEach((option) => {
+      option.addEventListener('click', () => {
+        selectCarouselPosition(Number(option.dataset.carouselPosition));
+      });
+      option.addEventListener('keydown', (event) => {
+        const left = ['ArrowLeft', 'a', 'A', 'GamepadLeftShoulder'].includes(event.key);
+        const right = ['ArrowRight', 'd', 'D', 'GamepadRightShoulder'].includes(event.key);
+        if (left || right) {
+          event.preventDefault();
+          event.stopPropagation();
+          moveCarouselFromRoving(left ? -1 : 1);
+        } else if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          event.stopPropagation();
+          selectCarouselPosition(event.key === 'Home' ? 1 : carousel.POSITION_COUNT, { focus: true });
+        }
+      });
+    });
+
+    ui.livingCarouselPageButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        showCarouselPage(Number(button.dataset.carouselPageButton));
+      });
+      button.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(event.key)) return;
+        event.preventDefault();
+        const moveRight = ['ArrowRight', 'd', 'D'].includes(event.key);
+        showCarouselPage(moveRight ? 1 : 0);
+      });
+    });
+
+    ui.livingCarouselModeButtons.forEach((button) => {
+      button.addEventListener('click', () => chooseCarouselMode(button.dataset.carouselMode));
+      button.addEventListener('keydown', (event) => {
+        const previous = ['ArrowLeft', 'ArrowUp', 'a', 'A'].includes(event.key);
+        const next = ['ArrowRight', 'ArrowDown', 'd', 'D'].includes(event.key);
+        if (!previous && !next) return;
+        event.preventDefault();
+        event.stopPropagation();
+        moveCarouselMode(button.dataset.carouselMode, previous ? -1 : 1);
+      });
+    });
+
+    ui.livingCarouselPlayButton.addEventListener('click', launchCarouselSelection);
+    ui.livingCarouselTrialButton.addEventListener('click', startTrial);
+    [ui.livingCarouselStage, ui.livingCarouselRail].forEach((surface) => {
+      surface.addEventListener('pointerdown', beginCarouselPointer, { passive: true });
+      surface.addEventListener('pointermove', moveCarouselPointer, { passive: true });
+      surface.addEventListener('pointerup', endCarouselPointer);
+      surface.addEventListener('pointercancel', endCarouselPointer);
+    });
+  }
+
+  function pollLivingCarouselGamepads(now) {
+    if (!carouselActive
+      || activeGameId
+      || document.hidden
+      || document.body.classList.contains('modal-open')
+      || typeof navigator.getGamepads !== 'function') {
+      carouselGamepadState.clear();
+      return;
+    }
+    const pads = navigator.getGamepads() || [];
+    for (const pad of pads) {
+      if (!pad) continue;
+      const left = Boolean(pad.buttons?.[4]?.pressed || pad.buttons?.[14]?.pressed || pad.axes?.[0] < -.65);
+      const right = Boolean(pad.buttons?.[5]?.pressed || pad.buttons?.[15]?.pressed || pad.axes?.[0] > .65);
+      const previous = carouselGamepadState.get(pad.index) || { left: false, right: false };
+      const direction = left && !previous.left ? -1 : right && !previous.right ? 1 : 0;
+      carouselGamepadState.set(pad.index, { left, right });
+      if (!direction || now - carouselLastGamepadMoveAt < 180) continue;
+      carouselLastGamepadMoveAt = now;
+      moveCarouselFromRoving(direction, { focus: false });
+      break;
+    }
   }
 
   function updateProfileUI() {
@@ -735,6 +2174,7 @@
       : 'COMPLETE ALL THREE TREES TO AWAKEN';
     updateVisitUI();
     updateStorageWarning();
+    renderLivingCarousel();
   }
 
   function renderGameStats(gameId) {
@@ -810,6 +2250,20 @@
     ui.gameShell.dataset.runState = active ? 'running' : 'idle';
   }
 
+  function activeSessionStatus() {
+    return activeLumenloomState?.session.status || activeSession?.status || null;
+  }
+
+  function focusGamePlayControl(gameId = 'lumenloom') {
+    if (carouselActive && carouselState && carousel && GAMES[gameId]) {
+      carouselState = carousel.selectGame(carouselState, gameId);
+      renderLivingCarousel();
+      ui.livingCarouselPlayButton.focus({ preventScroll: true });
+      return;
+    }
+    document.querySelector(`[data-play="${gameId}"]`)?.focus({ preventScroll: true });
+  }
+
   function lumenloomPlatformProfile() {
     const forcedProfile = new URLSearchParams(location.search).get('profile');
     if (forcedProfile === 'mobile' || forcedProfile === 'desktop') return forcedProfile;
@@ -825,7 +2279,12 @@
     return coarsePointer || noHover || touchDevice || viewportLooksHandheld;
   }
 
-  function openGame(gameId) {
+  function openGame(gameId, options = {}) {
+    if (pendingSave) {
+      showToast('Finish Retry Save before beginning another run.');
+      ui.pendingRetryButton.focus({ preventScroll: true });
+      return;
+    }
     if (launchGuard) return;
     launchGuard = true;
     window.setTimeout(() => { launchGuard = false; }, 240);
@@ -837,13 +2296,30 @@
     clearTimeout(readyTimer);
     activeGameId = gameId;
     activeSessionId = createSessionId();
-    const created = progression.createSession(gameId, activeSessionId, profile);
+    const requestedModeId = gameId === 'lumenloom'
+      ? trialSession?.active
+        ? 'standard'
+        : options.modeId || 'standard'
+      : null;
+    const created = gameId === 'lumenloom'
+      ? lumenloomSession.create({
+        profile,
+        modeId: requestedModeId,
+        sessionId: activeSessionId,
+        trial: Boolean(trialSession?.active)
+      })
+      : progression.createSession(gameId, activeSessionId, profile);
     if (!created.ok) {
-      showToast('The tree could not create a safe play session. Please try again.');
+      showToast(created.code === 'locked-mode'
+        ? 'That Lumenloom mode is still sleeping.'
+        : 'The tree could not create a safe play session. Please try again.');
       activeGameId = null;
+      activeSessionId = null;
       return;
     }
-    activeSession = created.session;
+    activeSession = gameId === 'lumenloom' ? null : created.session;
+    activeLumenloomState = gameId === 'lumenloom' ? created.state : null;
+    activeLumenloomModeId = gameId === 'lumenloom' ? requestedModeId : null;
     ui.groveScreen.classList.add('is-hidden');
     ui.gameShell.classList.remove('is-hidden');
     ui.gameShell.setAttribute('aria-hidden', 'false');
@@ -865,23 +2341,35 @@
       trial: trialSession?.active ? '1' : '0',
       session: activeSessionId
     });
-    if (gameId === 'lumenloom') gameParams.set('profile', lumenloomPlatformProfile());
+    if (gameId === 'lumenloom') {
+      gameParams.set('protocol', '2');
+      gameParams.set('mode', requestedModeId);
+      gameParams.set('profile', lumenloomPlatformProfile());
+    }
     ui.gameFrame.src = `${game.path}?${gameParams}`;
     syncModalState();
     const expectedSession = activeSessionId;
     readyTimer = window.setTimeout(() => {
-      if (activeSessionId !== expectedSession || activeSession?.status !== 'awaiting-ready') return;
+      const status = activeLumenloomState?.session.status || activeSession?.status;
+      if (activeSessionId !== expectedSession || status !== 'awaiting-ready') return;
       ui.frameLoadingTitle.textContent = 'THE TREE DID NOT ANSWER';
       ui.frameLoadingCopy.textContent = 'The game may have been moved or blocked. Retry it, or return without losing prior progress.';
       ui.frameLoadingActions.classList.remove('is-hidden');
       announce('The game did not finish loading. Retry and Return to Grove controls are available.');
       ui.retryGameButton.focus();
     }, 12000);
-    window.setTimeout(() => ui.returnButton.focus(), 80);
+    if (gameId !== 'lumenloom') {
+      window.setTimeout(() => ui.returnButton.focus({ preventScroll: true }), 80);
+    }
   }
 
   function requestCloseGame() {
-    if (activeSession?.status === 'running') {
+    if (pendingSave) {
+      showToast('This result has not been saved. Use Retry Save before leaving the tree.');
+      ui.pendingRetryButton.focus({ preventScroll: true });
+      return;
+    }
+    if (activeSessionStatus() === 'running') {
       setOverlay(ui.returnConfirmOverlay, true);
       window.setTimeout(() => ui.stayInGameButton.focus(), 80);
       return;
@@ -890,6 +2378,10 @@
   }
 
   function closeGame(options = {}) {
+    if (pendingSave) {
+      showToast('A save is still pending. Retry it before leaving this screen.');
+      return;
+    }
     const returningGame = activeGameId;
     clearTimeout(readyTimer);
     readyTimer = 0;
@@ -902,6 +2394,8 @@
     ui.trialProgress.classList.add('is-hidden');
     activeGameId = null;
     activeSession = null;
+    activeLumenloomState = null;
+    activeLumenloomModeId = null;
     activeSessionId = null;
     restartRenderer(true);
 
@@ -917,18 +2411,185 @@
     if (!options.suppressCeremonies && ceremonyQueue.length) {
       window.setTimeout(showNextCeremony, 120);
     } else if (!options.suppressFocus) {
-      window.setTimeout(() => document.querySelector(`[data-play="${returningGame || 'lumenloom'}"]`)?.focus(), 100);
+      window.setTimeout(() => focusGamePlayControl(returningGame || 'lumenloom'), 100);
     }
   }
 
+  function isTrustedGameMessageEvent(event) {
+    if (!activeGameId || event.source !== ui.gameFrame.contentWindow) return false;
+    if (location.protocol === 'file:') {
+      return !event.origin || event.origin === 'null';
+    }
+    return event.origin === location.origin;
+  }
+
   function validateMessage(event) {
-    if (!activeGameId || !activeSession || event.source !== ui.gameFrame.contentWindow) return null;
+    if (!activeSession || event.source !== ui.gameFrame.contentWindow) return null;
     if (location.protocol === 'file:') {
       if (event.origin && event.origin !== 'null') return null;
     } else if (event.origin !== location.origin) return null;
+    if (pendingSave && event.data?.type === 'run-start') return null;
     if (trialSession?.active && activeSession.status === 'completed' && event.data?.type === 'run-start') return null;
     const transitioned = progression.transitionSession(activeSession, event.data);
     return transitioned.ok ? transitioned : null;
+  }
+
+  function postV2Response(response) {
+    if (!response || !activeLumenloomState || activeGameId !== 'lumenloom') return false;
+    const targetOrigin = location.protocol === 'file:' ? '*' : location.origin;
+    ui.gameFrame.contentWindow?.postMessage(response, targetOrigin);
+    return true;
+  }
+
+  function presentV2RecordedResult(transaction, presentation) {
+    if (!transaction || !presentation || presentation.gameId !== 'lumenloom') return;
+    const previousTotal = transaction.beforeProfile.games.lumenloom.totalScore;
+    const context = Object.freeze({
+      result: presentation.result,
+      gameId: 'lumenloom',
+      game: GAMES.lumenloom,
+      feedback: presentation.feedback,
+      previousTotal,
+      oldGrowth: growthFor('lumenloom', previousTotal),
+      applied: Object.freeze({ rewards: presentation.rewards || Object.freeze([]) })
+    });
+    // The saved response is queued first. Grove spectacle begins on the next
+    // task so neither the parent nor child can present an unacknowledged score.
+    window.setTimeout(() => finishRecordedResult(context), 0);
+  }
+
+  function settleActiveV2Pending(pendingKey, disposition, options = {}) {
+    if (!activeLumenloomState?.pending || activeLumenloomState.pending.key !== pendingKey) return null;
+    const transaction = activeLumenloomState.pending;
+    const settled = lumenloomSession.settlePending(activeLumenloomState, pendingKey, disposition);
+    if (settled.state && lumenloomSession.isState(settled.state)) activeLumenloomState = settled.state;
+    if (settled.response) postV2Response(settled.response);
+
+    if (!settled.ok) return settled;
+    if (settled.code === 'run-started') {
+      prepareForRun();
+      if (settled.effect === 'start-unsaved') {
+        showToast('This run is playing without saving. Its result will be marked Unsaved.');
+      }
+    } else if (settled.code === 'result-saved') {
+      setRunChromeActive(false);
+      presentV2RecordedResult(transaction, settled.presentation);
+    } else if (settled.code === 'result-unsaved') {
+      setRunChromeActive(false);
+      showToast('This result was left unsaved. Previously recorded Grove progress did not change.');
+    }
+
+    if (settled.effect === 'return' || options.closeAfter) {
+      window.setTimeout(() => closeGame({
+        cancelTrial: Boolean(options.cancelTrial),
+        suppressCeremonies: Boolean(options.suppressCeremonies)
+      }), 0);
+    }
+    return settled;
+  }
+
+  function commitV2Transaction(transaction) {
+    if (!transaction || !activeLumenloomState?.pending
+      || transaction.key !== activeLumenloomState.pending.key) return;
+    const isStart = transaction.kind === 'start';
+    const label = isStart
+      ? `${GAMES.lumenloom.title} ${activeLumenloomModeId} start`
+      : `${GAMES.lumenloom.title} ${activeLumenloomModeId} result`;
+    const recoveryOptions = Object.freeze({
+      sessionProfile: transaction.beforeProfile,
+      allowSessionEscape: isStart && !trialSession?.active,
+      sessionEscapeLabel: 'PLAY WITHOUT SAVING',
+      onSessionEscape: () => settleActiveV2Pending(transaction.key, 'unsaved'),
+      allowReturn: isStart || transaction.kind === 'result',
+      returnLabel: isStart ? 'RETURN TO GROVE' : 'RETURN WITHOUT SAVING',
+      onReturn: () => settleActiveV2Pending(
+        transaction.key,
+        isStart ? 'discarded' : 'unsaved',
+        {
+          closeAfter: true,
+          cancelTrial: Boolean(trialSession?.active),
+          suppressCeremonies: true
+        }
+      ),
+      pendingCopy: isStart
+        ? 'The mode has not started and its play was not recorded. Retry the exact save, return safely, or explicitly play this run without saving.'
+        : 'The score is paused before presentation. Retry this exact result, or return without saving it.',
+      resume: () => settleActiveV2Pending(transaction.key, 'saved'),
+      allowNoRetryChoice: true
+    });
+    const committed = commitProfile(transaction.proposedProfile, {
+      label,
+      ...recoveryOptions
+    });
+    if (!committed.ok) {
+      const failed = settleActiveV2Pending(transaction.key, 'failed');
+      if (!committed.retryPayload) {
+        rememberPendingSave(committed, null, label, {
+          ...recoveryOptions,
+          allowNoRetry: true,
+          pendingCopy: isStart
+            ? 'Local saving is unavailable. Explicitly play this run without saving, or return to the Grove with earlier progress untouched.'
+            : 'Local saving is unavailable. Return without saving this result; earlier Grove progress remains untouched.'
+        });
+      }
+      return failed;
+    }
+    return settleActiveV2Pending(transaction.key, 'saved');
+  }
+
+  function handleV2Message(event) {
+    if (!activeLumenloomState || activeGameId !== 'lumenloom' || !isTrustedGameMessageEvent(event)) return;
+    const transitioned = lumenloomSession.receive(
+      activeLumenloomState,
+      event.data,
+      { updatedAt: new Date().toISOString() }
+    );
+    if (transitioned.state && lumenloomSession.isState(transitioned.state)) {
+      activeLumenloomState = transitioned.state;
+    }
+    if (transitioned.response) postV2Response(transitioned.response);
+    if (!transitioned.ok) return;
+
+    if (transitioned.code === 'ready') {
+      clearTimeout(readyTimer);
+      readyTimer = 0;
+      ui.frameLoading.classList.add('is-loaded');
+      announce(`${GAMES.lumenloom.title} ${activeLumenloomModeId} is ready.`);
+      ui.gameFrame.focus({ preventScroll: true });
+      return;
+    }
+    if (transitioned.code === 'run-started') {
+      prepareForRun();
+      return;
+    }
+    if (transitioned.code === 'start-commit-required'
+      || transitioned.code === 'result-commit-required') {
+      commitV2Transaction(transitioned.transaction);
+      return;
+    }
+    if (transitioned.code === 'run-abandoned') {
+      setRunChromeActive(false);
+      ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
+      ui.nextGameButton.classList.add('is-hidden');
+      showToast('Run abandoned. No score was recorded.');
+      return;
+    }
+    if (transitioned.code === 'result-unsaved') {
+      setRunChromeActive(false);
+      showToast('Unsaved result shown. The Grove profile did not change.');
+      return;
+    }
+    if (transitioned.code === 'action-accepted') {
+      if (transitioned.effect === 'restart') {
+        setRunChromeActive(false);
+        ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
+      } else if (transitioned.effect === 'grove') {
+        window.setTimeout(() => closeGame({
+          cancelTrial: Boolean(trialSession?.active),
+          suppressCeremonies: false
+        }), 0);
+      }
+    }
   }
 
   function handleSessionTransition(transitioned) {
@@ -991,8 +2652,39 @@
       showToast('The run ended, but its score did not pass Grove validation. No progress changed.');
       return;
     }
-    profile = applied.profile;
-    saveProfile();
+    const proposed = proposeProfile(() => {}, { source: applied.profile });
+    const context = Object.freeze({
+      result,
+      gameId,
+      game,
+      feedback,
+      previousTotal,
+      oldGrowth,
+      applied
+    });
+    const committed = commitProfile(proposed, {
+      label: `${game.title} result`,
+      resume: () => finishRecordedResult(context)
+    });
+    if (!committed.ok) {
+      showToast(committed.retryPayload
+        ? 'Score is waiting for a verified save. Choose Retry Save; no growth has been shown yet.'
+        : 'This run remains unsaved. The installed Grove profile did not change.');
+      return;
+    }
+    finishRecordedResult(context);
+  }
+
+  function finishRecordedResult(context) {
+    const {
+      result,
+      gameId,
+      game,
+      feedback,
+      previousTotal,
+      oldGrowth,
+      applied
+    } = context;
     const newGrowth = growthFor(gameId);
     const nextReward = progression.nextRewardFor(profile, gameId);
     const growthStages = applied.rewards.filter((reward) => reward.type === 'growth-stage');
@@ -1196,14 +2888,27 @@
   function completeCurrentCeremony() {
     const ceremony = currentCeremony;
     if (!ceremony) return;
-    clearScorePresentation(ceremony.type === 'run-growth' ? ceremony.totalScore : undefined);
     if (ceremony.ceremonyKey) {
       const acknowledged = progression.acknowledgeCeremony(profile, ceremony.ceremonyKey);
-      if (acknowledged.ok) {
-        profile = acknowledged.profile;
-        saveProfile();
+      if (!acknowledged.ok) {
+        showToast('This reward could not be acknowledged safely. It remains ready.');
+        return;
+      }
+      const proposed = proposeProfile(() => {}, { source: acknowledged.profile });
+      const committed = commitProfile(proposed, {
+        label: 'Reward acknowledgement',
+        resume: () => finishCurrentCeremony(ceremony)
+      });
+      if (!committed.ok) {
+        showToast('The reward remains open until its acknowledgement is safely stored.');
+        return;
       }
     }
+    finishCurrentCeremony(ceremony);
+  }
+
+  function finishCurrentCeremony(ceremony) {
+    clearScorePresentation(ceremony.type === 'run-growth' ? ceremony.totalScore : undefined);
     currentCeremony = null;
     setOverlay(ui.growthOverlay, false);
     updateProfileUI();
@@ -1225,13 +2930,20 @@
     if (ceremonyQueue.length) window.setTimeout(showNextCeremony, 100);
     else {
       window.setTimeout(() => {
-        document.querySelector(`[data-play="${returnGame}"]`)?.focus();
+        focusGamePlayControl(returnGame);
       }, 100);
     }
   }
 
   function startTrial() {
-    if (ui.trialButton.disabled) return;
+    const trialReady = carousel && carouselDependencies
+      ? carousel.isTrialAvailable(profile, carouselDependencies)
+      : FOUNDATIONAL_GAME_IDS.every((gameId) => profile.games[gameId].completed);
+    if (!trialReady) {
+      showToast('Complete Lumenloom, Bloomfold, and Ripplewake to awaken the Threefold Trial.');
+      announceCarousel('Threefold Trial locked. Complete all three foundational trees.');
+      return;
+    }
     trialSession = {
       active: true,
       index: 0,
@@ -1242,7 +2954,7 @@
   }
 
   function continueTrial() {
-    if (!trialSession?.active || activeSession?.status !== 'completed') return;
+    if (!trialSession?.active || activeSessionStatus() !== 'completed') return;
     if (trialSession.index < trialSession.order.length - 1) {
       trialSession.index += 1;
       openGame(trialSession.order[trialSession.index]);
@@ -1258,11 +2970,22 @@
       showToast('The Trial could not verify all three scores. Completed tree progress remains safe.');
       return;
     }
-    updateProfile((draft) => {
+    const proposed = proposeProfile((draft) => {
       draft.trialBest = Math.max(draft.trialBest, scored.combined);
       draft.trialsCompleted = safeAdd(draft.trialsCompleted, 1);
     });
-    saveProfile({ timestamp: false });
+    const committed = commitProfile(proposed, {
+      label: 'Threefold Trial',
+      resume: () => finishTrialPresentation(scored)
+    });
+    if (!committed.ok) {
+      showToast('The Trial result is waiting for a verified save. Its mark has not been shown or counted yet.');
+      return;
+    }
+    finishTrialPresentation(scored);
+  }
+
+  function finishTrialPresentation(scored) {
     trialSession = null;
     closeGame({ suppressCeremonies: true, suppressFocus: true });
     rendererState.growthPulse = reducedMotion ? 0 : 1.3;
@@ -1280,6 +3003,11 @@
   }
 
   function resetProgress() {
+    if (pendingSave) {
+      showToast(`${pendingSave.label} is already waiting. Retry that exact save before resetting.`);
+      ui.pendingRetryButton.focus({ preventScroll: true });
+      return;
+    }
     const now = Date.now();
     if (!resetArmed || now > resetTimer) {
       resetArmed = true;
@@ -1288,23 +3016,37 @@
       showToast('This will erase Grove totals, Seeds, Trials, gallery specimens, and all five standalone bests in this browser.');
       return;
     }
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(BACKUP_STORAGE_KEY);
-      localStorage.removeItem('bloomfold-specimens');
-      localStorage.removeItem('mothchorus-playtest-v1');
-      Object.values(GAMES).forEach((game) => localStorage.removeItem(game.standaloneKey));
-      storageAvailable = true;
-      storageReadOnly = false;
-      storageRecovered = false;
-      storageNotice = '';
-    } catch (_) {
-      storageAvailable = false;
-      storageNotice = 'The browser blocked part of the reset. This session was reset, but stored data may remain.';
+    const committed = resetProfileStorage({
+      label: 'Grove reset',
+      resume: finishResetPresentation
+    });
+    if (!committed.ok) {
+      showToast(committed.retryPayload
+        ? 'Reset is waiting for a verified save. No visible progress has been erased yet.'
+        : 'Reset could not begin while another save is pending.');
+      return;
     }
-    profile = defaultProfile();
-    updateProfile((draft) => { draft.introSeen = true; });
-    saveProfile({ timestamp: false });
+    finishResetPresentation();
+  }
+
+  function finishResetPresentation() {
+    const optionalKeys = [
+      'bloomfold-specimens',
+      'mothchorus-playtest-v1',
+      ...Object.values(GAMES).map((game) => game.standaloneKey)
+    ];
+    let cleanupFailures = 0;
+    storageCleanupIncomplete = false;
+    optionalKeys.forEach((key) => {
+      try { localStorage.removeItem(key); }
+      catch (_) { cleanupFailures += 1; }
+    });
+    if (cleanupFailures > 0) {
+      storageCleanupIncomplete = true;
+      storageNotice = `The Grove profile was reset, but ${cleanupFailures} optional gallery or standalone record${cleanupFailures === 1 ? '' : 's'} could not be removed.`;
+    } else {
+      storageNotice = '';
+    }
     ceremonyQueue = [];
     currentCeremony = null;
     resetVisitState();
@@ -1317,8 +3059,11 @@
     rendererState.growthPulseColor = '#82f4ee';
     updateProfileUI();
     buildSaplings();
-    showToast('The clearing is quiet again. All three foundational trees remain playable.');
-    window.setTimeout(() => ui.settingsButton.focus(), 100);
+    showToast(cleanupFailures === 0
+      ? 'The clearing is quiet again. All three foundational trees remain playable.'
+      : 'The Grove is fresh. An optional standalone record could not be removed.');
+    updateStorageWarning();
+    syncFirstBloomVisibility({ restart: true, focus: true });
   }
 
   function sanitizeSpecimens(value) {
@@ -1374,6 +3119,11 @@
 
   async function importProgressFile(file) {
     if (!file) return;
+    if (pendingSave) {
+      ui.dataManagementStatus.textContent = `${pendingSave.label} is already waiting. Retry that exact save before importing another backup.`;
+      ui.pendingRetryButton.focus({ preventScroll: true });
+      return;
+    }
     if (storageReadOnly) {
       ui.dataManagementStatus.textContent = 'A newer-version save is protected. Reset explicitly before importing an older profile.';
       return;
@@ -1398,24 +3148,46 @@
       if (!validated.ok) throw new Error(validated.code);
       const specimens = parsed.bloomfoldSpecimens === undefined ? [] : sanitizeSpecimens(parsed.bloomfoldSpecimens);
       if (specimens === null) throw new Error('invalid-specimens');
-      profile = validated.profile;
-      saveProfile();
-      try { localStorage.setItem('bloomfold-specimens', JSON.stringify(specimens)); }
-      catch (_) { /* The core profile may still have imported successfully. */ }
-      ceremonyQueue = [];
-      currentCeremony = null;
-      resetVisitState();
-      clearScorePresentation();
-      enqueuePersistentRewards();
-      updateProfileUI();
-      buildSaplings();
-      rendererState.growthPulse = reducedMotion ? 0 : .8;
-      ui.dataManagementStatus.textContent = 'Backup imported and validated. The Grove has been refreshed.';
-      announce('Progress backup imported and validated.');
+      const proposed = proposeProfile(() => {}, { source: validated.profile });
+      const committed = commitProfile(proposed, {
+        label: 'Profile import',
+        resume: () => finishImportProgress(specimens)
+      });
+      if (!committed.ok) {
+        ui.dataManagementStatus.textContent = committed.retryPayload
+          ? 'Import validated; Retry Save to install this exact backup.'
+          : 'Import could not replace the protected profile. Reset explicitly first.';
+        return;
+      }
+      finishImportProgress(specimens);
     } catch (_) {
       ui.dataManagementStatus.textContent = 'Import failed: choose an unmodified First Bloom Grove backup.';
     } finally {
       ui.importProgressInput.value = '';
+    }
+  }
+
+  function finishImportProgress(specimens) {
+    let gallerySaved = true;
+    try { localStorage.setItem('bloomfold-specimens', JSON.stringify(specimens)); }
+    catch (_) { gallerySaved = false; }
+    ceremonyQueue = [];
+    currentCeremony = null;
+    resetVisitState();
+    clearScorePresentation();
+    enqueuePersistentRewards();
+    updateProfileUI();
+    buildSaplings();
+    rendererState.growthPulse = reducedMotion ? 0 : .8;
+    ui.dataManagementStatus.textContent = gallerySaved
+      ? 'Backup imported and validated. The Grove has been refreshed.'
+      : 'Core Grove progress imported. The optional Bloomfold gallery could not be stored.';
+    announce(gallerySaved
+      ? 'Progress backup imported and validated.'
+      : 'Core progress imported; optional gallery storage was unavailable.');
+    if (firstBloomNeeded()) {
+      setOverlay(ui.settingsOverlay, false);
+      syncFirstBloomVisibility({ restart: true, focus: true });
     }
   }
 
@@ -1475,6 +3247,8 @@
   }
 
   function openReleaseInformation() {
+    releaseInfoReturnsToSettings = ui.settingsOverlay.classList.contains('is-visible');
+    if (releaseInfoReturnsToSettings) setOverlay(ui.settingsOverlay, false);
     ui.releaseBuildIdentity.textContent = RELEASE_VERSION;
     resetDiagnosticsOutput();
     setOverlay(ui.releaseInfoOverlay, true);
@@ -1488,7 +3262,13 @@
   function closeReleaseInformation() {
     setOverlay(ui.releaseInfoOverlay, false);
     resetDiagnosticsOutput();
-    window.setTimeout(() => ui.releaseInfoButton.focus({ preventScroll: true }), 100);
+    const returnToSettings = releaseInfoReturnsToSettings;
+    releaseInfoReturnsToSettings = false;
+    if (returnToSettings) setOverlay(ui.settingsOverlay, true);
+    window.setTimeout(() => {
+      if (returnToSettings) ui.releaseInfoButton.focus({ preventScroll: true });
+      else ui.settingsButton.focus({ preventScroll: true });
+    }, 100);
   }
 
   function showToast(message, duration = 2.3) {
@@ -1498,28 +3278,34 @@
   }
 
   function syncModalState() {
-    const overlays = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay];
-    const modalOpen = overlays.some((overlay) => overlay.classList.contains('is-visible'));
+    const overlays = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay];
+    const topOverlay = overlays.find((overlay) => overlay.classList.contains('is-visible')) || null;
+    const modalOpen = Boolean(topOverlay);
+    overlays.forEach((overlay) => {
+      const visible = overlay.classList.contains('is-visible');
+      const interactive = visible && overlay === topOverlay;
+      overlay.inert = !interactive;
+      overlay.setAttribute('aria-hidden', String(!interactive));
+    });
     const gameOpen = !ui.gameShell.classList.contains('is-hidden');
     ui.groveScreen.inert = modalOpen || gameOpen;
     ui.gameShell.inert = modalOpen;
     document.body.classList.toggle('modal-open', modalOpen);
     ui.groveScreen.setAttribute('aria-hidden', String(modalOpen || gameOpen));
     ui.gameShell.setAttribute('aria-hidden', String(!gameOpen || modalOpen));
+    return modalOpen;
   }
 
   function setOverlay(overlay, visible) {
     overlay.classList.toggle('is-visible', visible);
-    overlay.setAttribute('aria-hidden', String(!visible));
-    overlay.inert = !visible;
-    syncModalState();
-    restartRenderer(!visible);
+    const modalOpen = syncModalState();
+    restartRenderer(!modalOpen && !document.hidden);
   }
 
   function trapModalFocus(event) {
     if (event.key !== 'Tab') return false;
-    const overlay = [ui.introOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay]
-      .find((candidate) => candidate.classList.contains('is-visible'));
+    const overlay = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay]
+      .find((candidate) => candidate.classList.contains('is-visible') && !candidate.inert);
     if (!overlay) return false;
     const focusable = [...overlay.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0);
@@ -1578,7 +3364,9 @@
     clearTimeout(resizeTimerId);
     resizeTimerId = window.setTimeout(() => {
       resizeTimerId = 0;
-      if (resizeCanvas()) restartRenderer(true);
+      const resized = resizeCanvas();
+      if (carouselActive) renderLivingCarousel();
+      if (resized) restartRenderer(true);
     }, view.mobileRenderer ? 120 : 60);
   }
 
@@ -2113,6 +3901,7 @@
     rendererFrameId = 0;
     const elapsed = Math.min(.25, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
+    pollLivingCarouselGamepads(now);
     const modalOpen = document.body.classList.contains('modal-open');
     const interactionPaused = view.mobileRenderer && now < rendererState.interactionQuietUntil;
     const animationPaused = activeGameId || document.hidden || interactionPaused
@@ -2194,13 +3983,16 @@
   });
 
   ui.gameFrame.addEventListener('load', () => {
-    if (activeSession?.status === 'awaiting-ready') ui.frameLoadingCopy.textContent = 'Game document opened; waiting for its secure ready signal…';
+    if (activeSessionStatus() === 'awaiting-ready') {
+      ui.frameLoadingCopy.textContent = 'Game document opened; waiting for its secure ready signal…';
+    }
   });
   ui.returnButton.addEventListener('click', requestCloseGame);
   ui.loadingReturnButton.addEventListener('click', () => closeGame({ cancelTrial: Boolean(trialSession?.active) }));
   ui.retryGameButton.addEventListener('click', () => {
     const gameId = activeGameId;
-    if (gameId) openGame(gameId);
+    const modeId = activeLumenloomModeId;
+    if (gameId) openGame(gameId, { modeId });
   });
   ui.stayInGameButton.addEventListener('click', () => {
     setOverlay(ui.returnConfirmOverlay, false);
@@ -2213,21 +4005,6 @@
   ui.nextGameButton.addEventListener('click', continueTrial);
   ui.trialButton.addEventListener('click', startTrial);
 
-  ui.enterGroveButton.addEventListener('click', () => {
-    updateProfile((draft) => { draft.introSeen = true; });
-    saveProfile({ timestamp: false });
-    ui.enterGroveButton.blur();
-    setOverlay(ui.introOverlay, false);
-    rendererState.growthPulse = reducedMotion ? 0 : .7;
-    window.scrollTo(0, 0);
-    requestAnimationFrame(() => window.scrollTo(0, 0));
-    setTimeout(() => {
-      if (ceremonyQueue.length) showNextCeremony();
-      else document.querySelector('[data-play="lumenloom"]')?.focus({ preventScroll: true });
-      window.scrollTo(0, 0);
-    }, 100);
-  });
-
   ui.growthContinueButton.addEventListener('click', completeCurrentCeremony);
 
   ui.trialDoneButton.addEventListener('click', () => {
@@ -2235,7 +4012,13 @@
     updateProfileUI();
     buildSaplings();
     if (ceremonyQueue.length) window.setTimeout(showNextCeremony, 100);
-    else window.setTimeout(() => ui.trialButton.focus(), 100);
+    else window.setTimeout(() => {
+      if (carouselActive && !ui.livingCarouselTrialButton.hidden) {
+        ui.livingCarouselTrialButton.focus({ preventScroll: true });
+      } else {
+        ui.trialButton.focus({ preventScroll: true });
+      }
+    }, 100);
   });
 
   ui.settingsButton.addEventListener('click', () => {
@@ -2249,6 +4032,9 @@
     setTimeout(() => ui.settingsButton.focus(), 100);
   });
   ui.groveSoundButton.addEventListener('click', toggleGroveSound);
+  ui.pendingRetryButton.addEventListener('click', retryPendingSave);
+  ui.pendingSessionButton.addEventListener('click', continuePendingSessionOnly);
+  ui.pendingReturnButton.addEventListener('click', returnPendingWithoutSaving);
   ui.resetProgressButton.addEventListener('click', resetProgress);
   ui.exportProgressButton.addEventListener('click', exportProgress);
   ui.importProgressButton.addEventListener('click', () => ui.importProgressInput.click());
@@ -2258,13 +4044,20 @@
   ui.closeReleaseInfoButton.addEventListener('click', closeReleaseInformation);
 
   window.addEventListener('message', (event) => {
+    if (activeLumenloomState) {
+      handleV2Message(event);
+      return;
+    }
     const transitioned = validateMessage(event);
     if (transitioned) handleSessionTransition(transitioned);
   });
 
   window.addEventListener('keydown', (event) => {
     if (trapModalFocus(event)) return;
-    if (event.key === 'Escape' && ui.releaseInfoOverlay.classList.contains('is-visible')) {
+    if (event.key === 'Escape' && ui.saveRecoveryOverlay.classList.contains('is-visible')) {
+      event.preventDefault();
+      ui.pendingRetryButton.focus({ preventScroll: true });
+    } else if (event.key === 'Escape' && ui.releaseInfoOverlay.classList.contains('is-visible')) {
       closeReleaseInformation();
     } else if (event.key === 'Escape' && ui.settingsOverlay.classList.contains('is-visible')) {
       ui.closeSettingsButton.click();
@@ -2274,10 +4067,15 @@
   });
 
   window.addEventListener('resize', queueCanvasResize, { passive: true });
+  window.addEventListener('beforeunload', (event) => {
+    if (!pendingSave) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
   window.addEventListener('scroll', () => quietRendererFor(180), { passive: true });
   ui.groveScreen.addEventListener('pointerdown', () => quietRendererFor(140), { passive: true, capture: true });
-  document.addEventListener('visibilitychange', () => restartRenderer(!document.hidden));
   document.addEventListener('visibilitychange', () => {
+    handleFirstBloomVisibilityChange();
     if (document.hidden) stopActiveAudioNodes();
   });
   motionQuery?.addEventListener?.('change', (event) => {
@@ -2286,20 +4084,23 @@
     if (reducedMotion && currentCeremony?.type === 'run-growth') clearScorePresentation(currentCeremony.totalScore);
     restartRenderer(true);
   });
-  saveProfile({ timestamp: false });
+  installFirstBloomControls();
+  installLivingCarouselControls();
+  startProfileStorage();
   enqueuePersistentRewards();
   buildSaplings();
   updateGroveSoundUI();
   updateProfileUI();
   resizeCanvas();
-  if (profile.introSeen) {
-    setOverlay(ui.introOverlay, false);
+  if (pendingSave) {
+    stopFirstBloom();
+    setOverlay(ui.firstBloomOverlay, false);
+  } else if (!syncFirstBloomVisibility({ restart: true, focus: true })) {
     window.scrollTo(0, 0);
     requestAnimationFrame(() => window.scrollTo(0, 0));
     setTimeout(() => window.scrollTo(0, 0), 120);
     if (ceremonyQueue.length) setTimeout(showNextCeremony, 180);
   }
-  else setTimeout(() => ui.enterGroveButton.focus(), 100);
   syncModalState();
   if (qaHostAllowed) {
     window.__MASTERY_GROVE_QA__ = Object.freeze({

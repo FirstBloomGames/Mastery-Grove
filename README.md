@@ -1,6 +1,10 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.8**
+Current build: **0.4.0-rc.9**
+
+This candidate introduces the playable **Living Carousel** and Lumenloom **Petal Rush** vertical slice. The Grove now opens into one selected-tree clearing with accurate Best, Target, growth, gate, mode, Visit Harmony, and Trial state; all ten tree positions remain reachable, while locked and unannounced trees stay honestly inspectable without false launch or purchase language. The former catalogue remains as a fail-closed inert fallback and never shares layout work with the active carousel. Phone navigation uses two discrete pages of five, 44-pixel targets, one-tree swipes, vertical cancellation, keyboard and gamepad equivalents, safe-area wrapping, and explicit Play.
+
+After First Bloom, Petal Rush is the remembered Lumenloom default: an immediate 90-second score attack with 11 replenished flowers, three petals, 100 Lumen, a 3.2-second fray window, deterministic threat replacement, exact capped proof/scoring, and parent-owned protocol-v2 Restart and Grove actions. Trial continues to force Standard without overwriting the player’s Petal selection. Standard Night Garden, canonical Mastery Seeds, profile migration, storage recovery, and all four existing protocol-v1 games remain regression-protected.
 
 This candidate integrates **Mothchorus** as Tree 05 and the first advanced discipline of the Second Grove. The Choir Linden is visible but locked until the player defeats Prismbind and permanently awakens the Crownheart. Once unlocked, Solo and Together runs share the same rules, score ceiling, Best lane, Tree Total, growth, and Choir Seed proof. Profile v5 strictly migrates existing rc.7 progress in place, and the parent Grove validates every Mothchorus run lifecycle and result before applying it exactly once.
 

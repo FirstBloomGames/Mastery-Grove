@@ -695,6 +695,25 @@ kbd {
 
 .text-button:hover { color: var(--paper); }
 
+.compact-panel .text-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+:root[data-lumen-mode="petalRush"] .score-block strong {
+  color: #fff2a8;
+  text-shadow: 0 0 22px rgba(255, 217, 119, .36);
+}
+
+:root[data-lumen-mode="petalRush"] .phase-block {
+  border-color: rgba(255, 217, 119, .22);
+  background: linear-gradient(145deg, rgba(255, 217, 119, .1), rgba(115, 232, 210, .055));
+}
+
+:root[data-lumen-mode="petalRush"] .objective-track i {
+  background: linear-gradient(90deg, #73e8d2, #ffd977, #ffad62);
+}
+
 .blessing-panel { width: min(860px, 94vw); }
 
 .blessing-choices {

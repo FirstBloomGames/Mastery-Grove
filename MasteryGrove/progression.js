@@ -1,13 +1,17 @@
 (function initializeMasteryGroveProgression(root, factory) {
   "use strict";
 
-  const api = factory();
+  const lumenloomModes = typeof module === "object" && module.exports
+    ? require("../Lumenloom/modes.js")
+    : root.LumenloomModes;
+  const api = factory(lumenloomModes);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.MasteryGroveProgression = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function createMasteryGroveProgression() {
+})(typeof globalThis !== "undefined" ? globalThis : this, function createMasteryGroveProgression(lumenloomModes) {
   "use strict";
 
-  const PROFILE_VERSION = 5;
+  const PROFILE_VERSION = 6;
+  const PROFILE_V5_VERSION = 5;
   const LEGACY_PROFILE_VERSION = 4;
   // The collection's existing bridge is version 1. D-020 hardens that
   // contract with a parent-issued sessionId without needlessly breaking all
@@ -21,6 +25,14 @@
   const FOUNDATIONAL_GAME_IDS = Object.freeze(["lumenloom", "bloomfold", "ripplewake"]);
   const LEGACY_GAME_IDS = Object.freeze([...FOUNDATIONAL_GAME_IDS, "prismbind"]);
   const ALL_GAME_IDS = Object.freeze([...LEGACY_GAME_IDS, "mothchorus"]);
+  if (!lumenloomModes
+    || !Array.isArray(lumenloomModes.MODE_IDS)
+    || !lumenloomModes.MAX_SCORES) {
+    throw new Error("Lumenloom mode rules must load before Mastery Grove progression.");
+  }
+  const LUMENLOOM_MODE_IDS = lumenloomModes.MODE_IDS;
+  const LUMENLOOM_REMIX_MODE_IDS = Object.freeze(LUMENLOOM_MODE_IDS.slice(1));
+  const LUMENLOOM_MODE_MAX_SCORES = lumenloomModes.MAX_SCORES;
   const GROWTH_STAGES = Object.freeze(["SEED", "BUD", "BRONZE", "SILVER", "GOLD", "FULL BLOOM"]);
   const MOTHCHORUS_RANKS = deepFreeze([
     { minimum: 0, name: "FIRST VOICE" },
@@ -104,13 +116,20 @@
     { marks: 15, name: "THREECROWN", message: "Three crowns are awake. Gold, cyan, and coral move as one living canopy." }
   ]);
 
-  const PROFILE_KEYS = Object.freeze([
+  const PROFILE_V5_KEYS = Object.freeze([
     "version", "introSeen", "games", "trialBest", "trialsCompleted",
     "legacyTrialBest", "legacyTrialsCompleted", "unlocks", "regions", "updatedAt"
   ]);
+  const PROFILE_KEYS = Object.freeze([...PROFILE_V5_KEYS, "livingArcade"]);
   const GAME_RECORD_KEYS = Object.freeze([
     "totalScore", "standardBest", "assistedBest", "plays", "completed",
     "victories", "lastScore", "lastRank", "masterySeed", "seedCeremonySeen"
+  ]);
+  const LIVING_ARCADE_KEYS = Object.freeze(["onboarding", "modes"]);
+  const ONBOARDING_KEYS = Object.freeze(["firstBloomCompleted"]);
+  const LIVING_ARCADE_MODE_GROUP_KEYS = Object.freeze(["lumenloom"]);
+  const LUMENLOOM_MODE_RECORD_KEYS = Object.freeze([
+    "standardBest", "assistedBest", "plays", "completions", "victories"
   ]);
   const UNLOCK_KEYS = Object.freeze(["prismbind", "prismbindCeremonySeen"]);
   const REGION_KEYS = Object.freeze(["secondGroveUnlocked", "trees05To07Revealed", "ceremonySeen"]);
@@ -169,9 +188,32 @@
     };
   }
 
-  function makeDefaultProfile() {
+  function makeLumenloomModeRecord() {
     return {
-      version: PROFILE_VERSION,
+      standardBest: 0,
+      assistedBest: 0,
+      plays: 0,
+      completions: 0,
+      victories: 0
+    };
+  }
+
+  function makeLivingArcade() {
+    return {
+      onboarding: {
+        firstBloomCompleted: false
+      },
+      modes: {
+        lumenloom: Object.fromEntries(
+          LUMENLOOM_REMIX_MODE_IDS.map((modeId) => [modeId, makeLumenloomModeRecord()])
+        )
+      }
+    };
+  }
+
+  function makeDefaultProfileV5() {
+    return {
+      version: PROFILE_V5_VERSION,
       introSeen: false,
       games: Object.fromEntries(ALL_GAME_IDS.map((gameId) => [gameId, makeGameRecord()])),
       trialBest: 0,
@@ -191,13 +233,21 @@
     };
   }
 
+  function makeDefaultProfile() {
+    return {
+      ...makeDefaultProfileV5(),
+      version: PROFILE_VERSION,
+      livingArcade: makeLivingArcade()
+    };
+  }
+
   function defaultProfile() {
     return deepFreeze(makeDefaultProfile());
   }
 
-  function cloneCanonicalProfile(profile) {
+  function cloneCanonicalProfileV5(profile) {
     return {
-      version: PROFILE_VERSION,
+      version: PROFILE_V5_VERSION,
       introSeen: profile.introSeen,
       games: Object.fromEntries(ALL_GAME_IDS.map((gameId) => [gameId, { ...profile.games[gameId] }])),
       trialBest: profile.trialBest,
@@ -207,6 +257,26 @@
       unlocks: { ...profile.unlocks },
       regions: { ...profile.regions },
       updatedAt: profile.updatedAt
+    };
+  }
+
+  function cloneCanonicalProfile(profile) {
+    return {
+      ...cloneCanonicalProfileV5(profile),
+      version: PROFILE_VERSION,
+      livingArcade: {
+        onboarding: {
+          firstBloomCompleted: profile.livingArcade.onboarding.firstBloomCompleted
+        },
+        modes: {
+          lumenloom: Object.fromEntries(
+            LUMENLOOM_REMIX_MODE_IDS.map((modeId) => [
+              modeId,
+              { ...profile.livingArcade.modes.lumenloom[modeId] }
+            ])
+          )
+        }
+      }
     };
   }
 
@@ -231,6 +301,16 @@
     return rank;
   }
 
+  function canonicalLumenloomRank(score, victory) {
+    if (!isCounter(score) || typeof victory !== "boolean") return null;
+    if (victory && score >= 14000) return "DAWN ARCHITECT";
+    if (victory && score >= 9500) return "MOONLOOM MASTER";
+    if (victory) return "NIGHT WEAVER";
+    if (score >= 5500) return "GOLDEN THREAD";
+    if (score >= 2500) return "LOOMWING";
+    return "FIRST FIREFLY";
+  }
+
   function isCanonicalGameRecord(record, gameId) {
     if (!hasExactKeys(record, GAME_RECORD_KEYS)) return false;
     if (![record.totalScore, record.standardBest, record.assistedBest, record.plays, record.victories, record.lastScore].every(isCounter)) return false;
@@ -244,7 +324,8 @@
   }
 
   function hasCanonicalProfileShell(profile, version, gameIds, allowVictoryLatchRepair = false) {
-    if (!hasExactKeys(profile, PROFILE_KEYS) || profile.version !== version) return false;
+    const profileKeys = version === PROFILE_VERSION ? PROFILE_KEYS : PROFILE_V5_KEYS;
+    if (!hasExactKeys(profile, profileKeys) || profile.version !== version) return false;
     if (typeof profile.introSeen !== "boolean") return false;
     if (!hasExactKeys(profile.games, gameIds)) return false;
     if (![profile.trialBest, profile.trialsCompleted, profile.legacyTrialBest, profile.legacyTrialsCompleted].every(isCounter)) return false;
@@ -283,7 +364,7 @@
   }
 
   function migrateCanonicalV4(profile) {
-    const migrated = makeDefaultProfile();
+    const migrated = makeDefaultProfileV5();
     migrated.introSeen = profile.introSeen;
     for (const gameId of LEGACY_GAME_IDS) migrated.games[gameId] = { ...profile.games[gameId] };
     migrated.trialBest = profile.trialBest;
@@ -300,12 +381,24 @@
     return migrated;
   }
 
+  function migrateCanonicalV5(profile) {
+    const migrated = {
+      ...cloneCanonicalProfileV5(profile),
+      version: PROFILE_VERSION,
+      livingArcade: makeLivingArcade()
+    };
+    migrated.livingArcade.onboarding.firstBloomCompleted = hasCanonicalProgressEvidence(profile);
+    return migrated;
+  }
+
   function migrateProfile(rawProfile, standaloneBests = {}) {
     const warnings = [];
     const rawIsObject = isPlainObject(rawProfile);
     const rawVersion = rawIsObject ? rawProfile.version : null;
 
-    if (typeof rawVersion === "number" && rawVersion > PROFILE_VERSION) {
+    if (typeof rawVersion === "number"
+      && (rawVersion > PROFILE_VERSION
+        || (rawVersion > PROFILE_V5_VERSION && rawVersion !== PROFILE_VERSION))) {
       return failed("future-profile", { sourceVersion: rawVersion, profile: null, warnings: Object.freeze([]) });
     }
 
@@ -316,7 +409,7 @@
 
     if (sourceVersion === PROFILE_VERSION) {
       if (!isCanonicalProfile(rawProfile)) {
-        return failed("invalid-profile-v5", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+        return failed("invalid-profile-v6", { sourceVersion, profile: null, warnings: Object.freeze([]) });
       }
       return deepFreeze({
         ok: true,
@@ -328,8 +421,34 @@
       });
     }
 
+    if (sourceVersion === PROFILE_V5_VERSION) {
+      if (!isCanonicalProfileV5(rawProfile)) {
+        return failed("invalid-profile-v5", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      const migrated = migrateCanonicalV5(rawProfile);
+      if (!isCanonicalProfile(migrated)) {
+        return failed("invalid-profile-v5", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        sourceVersion,
+        migrated: true,
+        warnings: Object.freeze([]),
+        profile: deepFreeze(migrated)
+      });
+    }
+
     if (sourceVersion === LEGACY_PROFILE_VERSION) {
       if (!isCanonicalProfileV4(rawProfile, true)) {
+        return failed("invalid-profile-v4", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      const migratedV5 = migrateCanonicalV4(rawProfile);
+      if (!isCanonicalProfileV5(migratedV5)) {
+        return failed("invalid-profile-v4", { sourceVersion, profile: null, warnings: Object.freeze([]) });
+      }
+      const migrated = migrateCanonicalV5(migratedV5);
+      if (!isCanonicalProfile(migrated)) {
         return failed("invalid-profile-v4", { sourceVersion, profile: null, warnings: Object.freeze([]) });
       }
       return deepFreeze({
@@ -338,7 +457,7 @@
         sourceVersion,
         migrated: true,
         warnings: Object.freeze([]),
-        profile: deepFreeze(migrateCanonicalV4(rawProfile))
+        profile: deepFreeze(migrated)
       });
     }
 
@@ -349,7 +468,11 @@
 
     for (const gameId of ALL_GAME_IDS) {
       const definition = GAME_DEFINITIONS[gameId];
-      const incoming = isPlainObject(sourceGames[gameId]) ? sourceGames[gameId] : {};
+      // Mothchorus first entered the canonical profile in v5. Older payloads
+      // cannot contain trustworthy history for a game that did not exist.
+      const incoming = gameId === "mothchorus" && sourceVersion !== null && sourceVersion <= 3
+        ? {}
+        : (isPlainObject(sourceGames[gameId]) ? sourceGames[gameId] : {});
       // Standalone Mothchorus history is deliberately outside Grove progress.
       // Trees 01-04 retain their established legacy-import behavior for v1-v3.
       const standaloneBest = gameId === "mothchorus" ? 0 : standaloneBestFor(standaloneBests, gameId);
@@ -411,6 +534,14 @@
     profile.updatedAt = source.updatedAt === null
       ? null
       : (typeof source.updatedAt === "string" ? source.updatedAt.slice(0, 64) : null);
+    profile.livingArcade.onboarding.firstBloomCompleted = hasCanonicalProgressEvidence(profile);
+    if (!isCanonicalProfile(profile)) {
+      return failed("invalid-legacy-profile", {
+        sourceVersion,
+        profile: null,
+        warnings: Object.freeze(warnings)
+      });
+    }
 
     return deepFreeze({
       ok: true,
@@ -422,8 +553,8 @@
     });
   }
 
-  function isCanonicalProfile(profile) {
-    if (!hasCanonicalProfileShell(profile, PROFILE_VERSION, ALL_GAME_IDS)) return false;
+  function hasCanonicalV5Semantics(profile, version) {
+    if (!hasCanonicalProfileShell(profile, version, ALL_GAME_IDS)) return false;
     const prismVictoryRecorded = profile.games.prismbind.victories > 0;
     if (profile.regions.secondGroveUnlocked !== prismVictoryRecorded
       || profile.regions.trees05To07Revealed !== prismVictoryRecorded) return false;
@@ -451,6 +582,168 @@
     if (!moth.completed && moth.lastRank !== "SEED") return false;
     if (moth.masterySeed && moth.standardBest < GAME_DEFINITIONS.mothchorus.seedThreshold) return false;
     return true;
+  }
+
+  function isCanonicalProfileV5(profile) {
+    return hasCanonicalV5Semantics(profile, PROFILE_V5_VERSION);
+  }
+
+  function isCanonicalLumenloomModeRecord(record, modeId, lumenloomTotal) {
+    if (!hasExactKeys(record, LUMENLOOM_MODE_RECORD_KEYS)) return false;
+    if (!LUMENLOOM_MODE_RECORD_KEYS.every((key) => isCounter(record[key]))) return false;
+    if (record.victories > record.completions || record.completions > record.plays) return false;
+    const positiveBestLanes = Number(record.standardBest > 0) + Number(record.assistedBest > 0);
+    if (positiveBestLanes > record.completions) return false;
+    if (record.standardBest > lumenloomTotal || record.assistedBest > lumenloomTotal) return false;
+    const maximum = LUMENLOOM_MODE_MAX_SCORES[modeId];
+    if (record.standardBest > maximum || record.assistedBest > maximum) return false;
+    return true;
+  }
+
+  function hasAnyModeActivity(record) {
+    return LUMENLOOM_MODE_RECORD_KEYS.some((key) => record[key] > 0);
+  }
+
+  function hasCanonicalProgressEvidence(profile) {
+    const hasGameProgress = ALL_GAME_IDS.some((gameId) => {
+      const record = profile.games[gameId];
+      return record.totalScore > 0
+        || record.standardBest > 0
+        || record.assistedBest > 0
+        || record.plays > 0
+        || record.completed
+        || record.victories > 0
+        || record.lastScore > 0
+        || record.masterySeed
+        || record.seedCeremonySeen;
+    });
+    return hasGameProgress
+      || profile.trialBest > 0
+      || profile.trialsCompleted > 0
+      || profile.legacyTrialBest > 0
+      || profile.legacyTrialsCompleted > 0
+      || profile.unlocks.prismbind
+      || profile.unlocks.prismbindCeremonySeen
+      || profile.regions.secondGroveUnlocked
+      || profile.regions.trees05To07Revealed
+      || profile.regions.ceremonySeen;
+  }
+
+  function hasCanonicalLivingArcade(profile) {
+    const livingArcade = profile.livingArcade;
+    if (!hasExactKeys(livingArcade, LIVING_ARCADE_KEYS)) return false;
+    if (!hasExactKeys(livingArcade.onboarding, ONBOARDING_KEYS)
+      || typeof livingArcade.onboarding.firstBloomCompleted !== "boolean") return false;
+    if (!hasExactKeys(livingArcade.modes, LIVING_ARCADE_MODE_GROUP_KEYS)) return false;
+    const lumenloomModes = livingArcade.modes.lumenloom;
+    if (!hasExactKeys(lumenloomModes, LUMENLOOM_REMIX_MODE_IDS)) return false;
+
+    const lumenloomTotal = profile.games.lumenloom.totalScore;
+    for (const modeId of LUMENLOOM_REMIX_MODE_IDS) {
+      if (!isCanonicalLumenloomModeRecord(lumenloomModes[modeId], modeId, lumenloomTotal)) return false;
+    }
+
+    const firstBloomCompleted = livingArcade.onboarding.firstBloomCompleted;
+    const hasRemixActivity = LUMENLOOM_REMIX_MODE_IDS.some((modeId) => hasAnyModeActivity(lumenloomModes[modeId]));
+    if (!firstBloomCompleted && (hasCanonicalProgressEvidence(profile) || hasRemixActivity)) return false;
+    if (hasAnyModeActivity(lumenloomModes.shiftingConstellation)
+      && lumenloomTotal < GAME_DEFINITIONS.lumenloom.thresholds[3]) return false;
+    if (hasAnyModeActivity(lumenloomModes.hollowRush)
+      && lumenloomTotal < GAME_DEFINITIONS.lumenloom.thresholds[4]) return false;
+    return true;
+  }
+
+  function isCanonicalProfile(profile) {
+    return hasCanonicalV5Semantics(profile, PROFILE_VERSION) && hasCanonicalLivingArcade(profile);
+  }
+
+  function completeFirstBloom(profile) {
+    if (!isCanonicalProfile(profile)) return failed("invalid-profile", { profile });
+    if (profile.livingArcade.onboarding.firstBloomCompleted) {
+      return deepFreeze({
+        ok: true,
+        code: "already-complete",
+        profile: deepFreeze(cloneCanonicalProfile(profile))
+      });
+    }
+    const next = cloneCanonicalProfile(profile);
+    next.livingArcade.onboarding.firstBloomCompleted = true;
+    return deepFreeze({ ok: true, code: "ok", profile: deepFreeze(next) });
+  }
+
+  function isLumenloomModeAvailable(profile, modeId) {
+    if (!isCanonicalProfile(profile) || !LUMENLOOM_MODE_IDS.includes(modeId)) return false;
+    if (modeId === "standard") return true;
+    if (modeId === "petalRush") return profile.livingArcade.onboarding.firstBloomCompleted;
+    const totalScore = profile.games.lumenloom.totalScore;
+    if (modeId === "shiftingConstellation") {
+      return totalScore >= GAME_DEFINITIONS.lumenloom.thresholds[3];
+    }
+    return totalScore >= GAME_DEFINITIONS.lumenloom.thresholds[4];
+  }
+
+  function recordLumenloomRemixStart(profile, modeId) {
+    if (!isCanonicalProfile(profile)) return failed("invalid-profile", { profile });
+    if (!LUMENLOOM_REMIX_MODE_IDS.includes(modeId)) return failed("invalid-mode", { profile });
+    if (!isLumenloomModeAvailable(profile, modeId)) return failed("mode-locked", { profile });
+    const record = profile.livingArcade.modes.lumenloom[modeId];
+    if (record.plays === MAX_COUNTER) return failed("counter-overflow", { profile });
+    const next = cloneCanonicalProfile(profile);
+    next.livingArcade.modes.lumenloom[modeId].plays += 1;
+    return deepFreeze({
+      ok: true,
+      code: "ok",
+      modeId,
+      profile: deepFreeze(next)
+    });
+  }
+
+  function validateLumenloomRemixResult(rawResult) {
+    if (!hasExactKeys(rawResult, ["modeId", "score", "victory", "assisted"])) {
+      return failed("invalid-remix-result");
+    }
+    if (!LUMENLOOM_REMIX_MODE_IDS.includes(rawResult.modeId)) return failed("invalid-mode");
+    if (!isCounter(rawResult.score)
+      || rawResult.score > LUMENLOOM_MODE_MAX_SCORES[rawResult.modeId]) return failed("invalid-score");
+    if (typeof rawResult.victory !== "boolean") return failed("invalid-victory");
+    if (typeof rawResult.assisted !== "boolean") return failed("invalid-assisted");
+    return deepFreeze({
+      ok: true,
+      code: "ok",
+      result: deepFreeze({
+        modeId: rawResult.modeId,
+        score: rawResult.score,
+        victory: rawResult.victory,
+        assisted: rawResult.assisted
+      })
+    });
+  }
+
+  function applyLumenloomRemixResult(profile, rawResult) {
+    if (!isCanonicalProfile(profile)) return failed("invalid-profile", { profile });
+    const validated = validateLumenloomRemixResult(rawResult);
+    if (!validated.ok) return failed(validated.code, { profile });
+    const result = validated.result;
+    if (!isLumenloomModeAvailable(profile, result.modeId)) return failed("mode-locked", { profile });
+    const currentRecord = profile.livingArcade.modes.lumenloom[result.modeId];
+    if (currentRecord.completions >= currentRecord.plays) return failed("run-not-started", { profile });
+
+    const next = cloneCanonicalProfile(profile);
+    const game = next.games.lumenloom;
+    const record = next.livingArcade.modes.lumenloom[result.modeId];
+    game.totalScore = safeAdd(game.totalScore, result.score);
+    record.completions += 1;
+    if (result.victory) record.victories += 1;
+    if (result.assisted) record.assistedBest = Math.max(record.assistedBest, result.score);
+    else record.standardBest = Math.max(record.standardBest, result.score);
+    if (!isCanonicalProfile(next)) return failed("invalid-remix-result", { profile });
+
+    return deepFreeze({
+      ok: true,
+      code: "ok",
+      profile: deepFreeze(next),
+      result
+    });
   }
 
   function growthFor(gameId, totalScore) {
@@ -805,6 +1098,11 @@
       return failed("game-locked", { profile, rewards: Object.freeze([]) });
     }
     const next = cloneCanonicalProfile(profile);
+    // During the staged v6 rollout, a successfully accepted legacy Standard
+    // result is itself definitive evidence that onboarding was already
+    // traversed. Keeping this latch causal preserves the rc.8 result reducer
+    // while ensuring every produced v6 profile remains canonical.
+    next.livingArcade.onboarding.firstBloomCompleted = true;
     const record = next.games[result.gameId];
     const priorGrowth = growthFor(result.gameId, record.totalScore);
     const eligibility = seedEligibilityCanonical(profile, result);
@@ -1116,7 +1414,7 @@
     }
     if (bundle.kind !== EXPORT_KIND) return failed("invalid-export-kind");
     if (bundle.bundleVersion !== EXPORT_VERSION) return failed("unsupported-export-version");
-    if (bundle.profileVersion !== PROFILE_VERSION && bundle.profileVersion !== LEGACY_PROFILE_VERSION) {
+    if (![PROFILE_VERSION, PROFILE_V5_VERSION, LEGACY_PROFILE_VERSION].includes(bundle.profileVersion)) {
       return failed("unsupported-profile-version");
     }
     if (!(bundle.exportedAt === null || (typeof bundle.exportedAt === "string" && bundle.exportedAt.length <= 64))) {
@@ -1124,12 +1422,28 @@
     }
     if (bundle.profileVersion === LEGACY_PROFILE_VERSION) {
       if (!isCanonicalProfileV4(bundle.profile, false)) return failed("invalid-export-profile");
+      const migratedV5 = migrateCanonicalV4(bundle.profile);
+      if (!isCanonicalProfileV5(migratedV5)) return failed("invalid-export-profile");
+      const migrated = migrateCanonicalV5(migratedV5);
+      if (!isCanonicalProfile(migrated)) return failed("invalid-export-profile");
       return deepFreeze({
         ok: true,
         code: "ok",
         sourceProfileVersion: LEGACY_PROFILE_VERSION,
         migrated: true,
-        profile: deepFreeze(migrateCanonicalV4(bundle.profile))
+        profile: deepFreeze(migrated)
+      });
+    }
+    if (bundle.profileVersion === PROFILE_V5_VERSION) {
+      if (!isCanonicalProfileV5(bundle.profile)) return failed("invalid-export-profile");
+      const migrated = migrateCanonicalV5(bundle.profile);
+      if (!isCanonicalProfile(migrated)) return failed("invalid-export-profile");
+      return deepFreeze({
+        ok: true,
+        code: "ok",
+        sourceProfileVersion: PROFILE_V5_VERSION,
+        migrated: true,
+        profile: deepFreeze(migrated)
       });
     }
     if (!isCanonicalProfile(bundle.profile)) return failed("invalid-export-profile");
@@ -1152,6 +1466,9 @@
     FOUNDATIONAL_GAME_IDS,
     SEED_ELIGIBLE_GAME_IDS,
     ALL_GAME_IDS,
+    LUMENLOOM_MODE_IDS,
+    LUMENLOOM_REMIX_MODE_IDS,
+    LUMENLOOM_MODE_MAX_SCORES,
     GROWTH_STAGES,
     GAME_DEFINITIONS,
     MOTHCHORUS_RANKS,
@@ -1159,10 +1476,15 @@
     defaultProfile,
     migrateProfile,
     isCanonicalProfile,
+    completeFirstBloom,
+    isLumenloomModeAvailable,
+    recordLumenloomRemixStart,
+    applyLumenloomRemixResult,
     growthFor,
     foundationalMarks,
     groveRankForMarks,
     isGameUnlocked,
+    canonicalLumenloomRank,
     canonicalMothchorusRank,
     validateRunResult,
     seedEligibility,
