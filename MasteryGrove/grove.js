@@ -2040,7 +2040,9 @@
       });
 
       const playLabel = carouselView.playable
-        ? `PLAY${modeSuffix}`
+        ? entry.gameId === 'lumenloom'
+          ? `PLAY ${(carouselView.modeName || entry.title).toUpperCase()}`
+          : `PLAY ${entry.title}`
         : sleeping ? 'SLEEPING' : 'LOCKED';
       ui.livingCarouselPlayButton.querySelector('span').textContent = playLabel;
       ui.livingCarouselPlayButton.setAttribute('aria-disabled', String(!carouselView.playable));
@@ -2315,6 +2317,8 @@
 
     ui.livingCarousel.addEventListener('click', (event) => {
       if (Date.now() >= carouselSuppressClickUntil) return;
+      const suppressibleSwipeClick = event.target?.closest?.('.living-carousel-stage, .living-carousel-rail');
+      if (!suppressibleSwipeClick) return;
       carouselSuppressClickUntil = 0;
       event.preventDefault();
       event.stopPropagation();

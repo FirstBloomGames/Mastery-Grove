@@ -2582,6 +2582,18 @@ button:focus-visible {
   gap: 5px;
 }
 
+.living-carousel-navigation-heading {
+  margin: 0;
+  padding: 0 2px;
+  color: color-mix(in srgb, var(--carousel-accent) 78%, var(--paper));
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .14em;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: uppercase;
+}
+
 .living-carousel-rail {
   min-width: 0;
   touch-action: pan-y;
@@ -2605,6 +2617,40 @@ button:focus-visible {
   color: var(--muted);
   background: rgba(7, 9, 29, .62);
   cursor: pointer;
+}
+
+.living-carousel-option[data-carousel-game] {
+  min-height: 50px;
+  grid-template-rows: minmax(20px, 1fr) auto;
+  padding: 3px 3px 5px;
+  border-radius: 13px 4px 13px 4px;
+}
+
+.living-carousel-option[data-carousel-game]::before {
+  content: attr(data-carousel-game);
+  grid-row: 2;
+  max-width: 100%;
+  overflow: hidden;
+  color: currentColor;
+  font-size: clamp(7px, .75vw, 9px);
+  font-weight: 950;
+  letter-spacing: .015em;
+  line-height: 1;
+  text-align: center;
+  text-overflow: clip;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.living-carousel-option[data-carousel-game] > span {
+  grid-row: 1;
+  align-self: end;
+}
+
+.living-carousel-option[data-carousel-game] > small {
+  top: -2px;
+  right: -2px;
+  bottom: auto;
 }
 
 .living-carousel-option > span {
@@ -2650,6 +2696,13 @@ button:focus-visible {
   color: transparent;
   background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, .2), rgba(92, 93, 145, .16) 54%, rgba(7, 9, 29, .8));
   transform: rotate(24deg);
+}
+
+.living-carousel-play > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .living-carousel-page-dots {
@@ -2776,6 +2829,8 @@ button:focus-visible {
     grid-template-columns: repeat(5, minmax(44px, 1fr));
     gap: 7px;
   }
+  .living-carousel-navigation-heading { font-size: 11px; }
+  .living-carousel-option[data-carousel-game]::before { font-size: clamp(7px, 2.1vw, 9px); }
   .living-carousel-rail[data-carousel-page="0"] .living-carousel-page[data-carousel-page-group="1"],
   .living-carousel-rail[data-carousel-page="1"] .living-carousel-page[data-carousel-page-group="0"] {
     display: none;

@@ -1,6 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.10**
+Current build: **0.4.0-rc.11**
+
+This candidate makes the Living Carousel unmistakably multi-game on phones. The five implemented tree selectors now visibly carry their game names, a concise Choose Game cue identifies the rail, and the main action names the selected game or Lumenloom mode. Lumenloom, Bloomfold, and Ripplewake remain awake from the beginning; Prismbind and Mothchorus retain their canonical progression gates. Swipe protection is now scoped to the swiped tree surfaces, so a quick Play tap can never be swallowed after changing games.
 
 This candidate makes every saved run visibly feed its own tree in the **Living Carousel**. Score transfer starts only after verified persistence, selects the returning tree, lands on the exact lifetime total within 2.5 seconds, and can be skipped immediately by Retry, Play, or tree selection. Lumenloom grows continuously within each stage; Trees 02–05 use deterministic stage forms; Full Bloom continues into uncapped, truthfully labeled Everbloom rings with six bounded visual tiers. Routine result modals are retired, rare milestone ceremonies remain, and phone/reduced-motion paths use fixed pools and explicit rendering caps.
 
