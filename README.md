@@ -1,8 +1,8 @@
 # First Bloom release candidate
 
-Current build: **0.4.0-rc.9**
+Current build: **0.4.0-rc.10**
 
-This candidate introduces the playable **Living Carousel** and Lumenloom **Petal Rush** vertical slice. The Grove now opens into one selected-tree clearing with accurate Best, Target, growth, gate, mode, Visit Harmony, and Trial state; all ten tree positions remain reachable, while locked and unannounced trees stay honestly inspectable without false launch or purchase language. The former catalogue remains as a fail-closed inert fallback and never shares layout work with the active carousel. Phone navigation uses two discrete pages of five, 44-pixel targets, one-tree swipes, vertical cancellation, keyboard and gamepad equivalents, safe-area wrapping, and explicit Play.
+This candidate makes every saved run visibly feed its own tree in the **Living Carousel**. Score transfer starts only after verified persistence, selects the returning tree, lands on the exact lifetime total within 2.5 seconds, and can be skipped immediately by Retry, Play, or tree selection. Lumenloom grows continuously within each stage; Trees 02–05 use deterministic stage forms; Full Bloom continues into uncapped, truthfully labeled Everbloom rings with six bounded visual tiers. Routine result modals are retired, rare milestone ceremonies remain, and phone/reduced-motion paths use fixed pools and explicit rendering caps.
 
 After First Bloom, Petal Rush is the remembered Lumenloom default: an immediate 90-second score attack with 11 replenished flowers, three petals, 100 Lumen, a 3.2-second fray window, deterministic threat replacement, exact capped proof/scoring, and parent-owned protocol-v2 Restart and Grove actions. Trial continues to force Standard without overwriting the player’s Petal selection. Standard Night Garden, canonical Mastery Seeds, profile migration, storage recovery, and all four existing protocol-v1 games remain regression-protected.
 

@@ -14,6 +14,7 @@
   const firstBloom = window.MasteryGroveFirstBloom;
   if (!firstBloom) throw new Error('Mastery Grove First Bloom engine did not load.');
   const carousel = window.MasteryGroveCarousel || null;
+  const growthVisuals = window.MasteryGroveGrowthVisuals || null;
   const lumenloomModes = window.LumenloomModes || null;
   const carouselDependencies = carousel && lumenloomModes
     ? Object.freeze({ progression, modeRules: lumenloomModes })
@@ -29,10 +30,7 @@
   const GROVE_SOUND_KEY = 'first-bloom-grove-audio-v1';
   const COLLECTION_SIZE = 10;
   const TAU = Math.PI * 2;
-  const SCORE_COUNT_DURATION_MS = 680;
   const SCORE_COUNT_MAX_WRITES = 20;
-  const SCORE_MOTE_CAP_DESKTOP = 10;
-  const SCORE_MOTE_CAP_MOBILE = 6;
   const RELEASE_VERSION = document.querySelector('meta[name="first-bloom-release"]')?.content?.trim() || 'unavailable';
 
   const TREE_VOICES = Object.freeze({
@@ -119,8 +117,19 @@
     livingCarouselJournalButton: $('livingCarouselJournalButton'),
     livingCarouselStage: $('livingCarouselStage'),
     livingCarouselTreeVisual: $('livingCarouselTreeVisual'),
+    livingCarouselTreeAuraRings: [...document.querySelectorAll('.living-carousel-tree-aura > i')],
+    livingCarouselTreeBranches: [...document.querySelectorAll('.living-carousel-tree-branches > i')],
+    livingCarouselTreeBlooms: [...document.querySelectorAll('.living-carousel-tree-blooms > i')],
     livingCarouselTreeSymbol: document.querySelector('.living-carousel-tree-symbol'),
     livingCarouselGrowthStage: $('livingCarouselGrowthStage'),
+    livingCarouselEverbloom: $('livingCarouselEverbloom'),
+    livingCarouselTransfer: $('livingCarouselTransfer'),
+    livingCarouselTransferLabel: $('livingCarouselTransferLabel'),
+    livingCarouselTransferScore: $('livingCarouselTransferScore'),
+    livingCarouselTransferTotal: $('livingCarouselTransferTotal'),
+    livingCarouselTransferRetry: $('livingCarouselTransferRetry'),
+    livingCarouselTransferMotes: [...document.querySelectorAll('.living-carousel-transfer-motes > i')],
+    livingCarouselTransferLive: $('livingCarouselTransferLive'),
     livingCarouselBest: $('livingCarouselBest'),
     livingCarouselTarget: $('livingCarouselTarget'),
     livingCarouselModes: $('livingCarouselModes'),
@@ -242,7 +251,6 @@
     ],
     growthOverlay: $('growthOverlay'),
     growthPanel: $('growthPanel'),
-    scoreStream: $('scoreStream'),
     growthSymbol: $('growthSymbol'),
     ceremonyKicker: $('ceremonyKicker'),
     growthTitle: $('growthTitle'),
@@ -372,11 +380,14 @@
   let ceremonyQueue = [];
   let currentCeremony = null;
   let trialSession = null;
+  let pendingGrowthTransfer = null;
+  let activeGrowthTransfer = null;
+  let growthTransferHideTimer = 0;
+  let growthVisualsFailed = false;
+  let pendingVisitHarmony = false;
   let toastTimer = 0;
   let resetArmed = false;
   let resetTimer = 0;
-  let scoreCounterFrame = 0;
-  let scoreStreamTimer = 0;
   let selectionReleaseTimer = 0;
   let launchGuard = false;
   const visitState = {
@@ -546,55 +557,6 @@
       return true;
     }
     return false;
-  }
-
-  function clearScorePresentation(finalValue) {
-    if (scoreCounterFrame) cancelAnimationFrame(scoreCounterFrame);
-    scoreCounterFrame = 0;
-    clearTimeout(scoreStreamTimer);
-    scoreStreamTimer = 0;
-    ui.scoreStream?.replaceChildren();
-    if (finalValue !== undefined && ui.growthScore) ui.growthScore.textContent = formatNumber(finalValue);
-  }
-
-  function startScorePresentation(ceremony) {
-    clearScorePresentation();
-    const previousTotal = safeInteger(ceremony.previousTotal);
-    const totalScore = safeInteger(ceremony.totalScore);
-    ui.growthScore.setAttribute('aria-label', `Updated tree total ${formatNumber(totalScore)}`);
-    if (reducedMotion || previousTotal === totalScore) {
-      ui.growthScore.textContent = formatNumber(totalScore);
-      return;
-    }
-
-    const moteCount = isLikelyMobileRenderer() ? SCORE_MOTE_CAP_MOBILE : SCORE_MOTE_CAP_DESKTOP;
-    const offsets = [-54, 38, -22, 62, 8, -70, 48, -36, 76, 20];
-    for (let index = 0; index < moteCount; index += 1) {
-      const mote = document.createElement('i');
-      mote.style.setProperty('--start-x', `${offsets[index]}px`);
-      mote.style.setProperty('--delay', `${index * 42}ms`);
-      ui.scoreStream.appendChild(mote);
-    }
-    scoreStreamTimer = window.setTimeout(() => ui.scoreStream.replaceChildren(), 1100);
-
-    const startedAt = performance.now();
-    let lastWrite = -1;
-    const tick = (now) => {
-      const progressValue = Math.min(1, Math.max(0, (now - startedAt) / SCORE_COUNT_DURATION_MS));
-      const eased = 1 - Math.pow(1 - progressValue, 3);
-      const writeIndex = Math.min(SCORE_COUNT_MAX_WRITES, Math.floor(progressValue * SCORE_COUNT_MAX_WRITES));
-      if (writeIndex !== lastWrite) {
-        lastWrite = writeIndex;
-        ui.growthScore.textContent = formatNumber(previousTotal + Math.round((totalScore - previousTotal) * eased));
-      }
-      if (progressValue < 1) scoreCounterFrame = requestAnimationFrame(tick);
-      else {
-        scoreCounterFrame = 0;
-        ui.growthScore.textContent = formatNumber(totalScore);
-      }
-    };
-    ui.growthScore.textContent = formatNumber(previousTotal);
-    scoreCounterFrame = requestAnimationFrame(tick);
   }
 
   function highlightReturnedTree(gameId) {
@@ -1614,6 +1576,338 @@
     return view.reward?.skillLabel || 'TREE SLEEPING';
   }
 
+  function growthRenderOptions() {
+    return Object.freeze({
+      deviceClass: isLikelyMobileRenderer() ? 'phone' : 'desktop',
+      reducedMotion
+    });
+  }
+
+  function setPooledVisibility(elements, visibleCount) {
+    const count = Math.max(0, Math.min(elements.length, Math.round(visibleCount)));
+    elements.forEach((element, index) => { element.hidden = index >= count; });
+  }
+
+  function hideGrowthTransferSurface() {
+    window.clearTimeout(growthTransferHideTimer);
+    growthTransferHideTimer = 0;
+    ui.livingCarouselStage?.classList.remove('has-transfer');
+    if (ui.livingCarouselTransfer) {
+      ui.livingCarouselTransfer.classList.remove('is-visible', 'is-streaming');
+      ui.livingCarouselTransfer.hidden = true;
+    }
+    ui.livingCarouselTransferMotes.forEach((mote) => {
+      mote.hidden = true;
+      mote.classList.remove('is-active');
+    });
+  }
+
+  function failGrowthVisuals(error, descriptor = null) {
+    if (growthVisualsFailed) {
+      if (descriptor?.delta > 0) {
+        showToast(`${formatNumber(descriptor.delta)} points were saved to ${GAMES[descriptor.gameId]?.tree || 'the selected tree'}.`);
+      }
+      return false;
+    }
+    growthVisualsFailed = true;
+    const result = descriptor || activeGrowthTransfer?.descriptor || pendingGrowthTransfer;
+    pendingGrowthTransfer = null;
+    activeGrowthTransfer = null;
+    hideGrowthTransferSurface();
+    if (ui.livingCarousel) ui.livingCarousel.dataset.growthVisualState = 'static-fallback';
+    if (result?.delta > 0) {
+      showToast(`${formatNumber(result.delta)} points were saved to ${GAMES[result.gameId]?.tree || 'the selected tree'}.`);
+    }
+    if (error) console.error('Score growth stayed on its static, playable fallback.', error);
+    return false;
+  }
+
+  function modelForCarouselEntry(entry, totalScore) {
+    if (!growthVisuals || growthVisualsFailed) return null;
+    const options = growthRenderOptions();
+    return entry?.gameId
+      ? growthVisuals.deriveTreeModel(entry.gameId, safeInteger(totalScore), options)
+      : growthVisuals.deriveSleepingSeed(entry?.position, options);
+  }
+
+  function applyGrowthVisualModel(model, entry) {
+    if (!model || !ui.livingCarouselTreeVisual || !ui.livingCarouselStage) return false;
+    const visual = ui.livingCarouselTreeVisual;
+    const geometry = model.geometry;
+    const branchFraction = geometry.branchSegments / Math.max(1, model.render.caps.branchSegments);
+    const foliageTotal = geometry.leafCount + geometry.flowerCount;
+    const foliageFraction = foliageTotal / Math.max(1, model.render.caps.foliage);
+    const bloomFraction = geometry.flowerCount / Math.max(1, model.render.caps.foliage);
+    const stageIndex = Number.isSafeInteger(model.stage.index) ? model.stage.index : null;
+
+    visual.dataset.growthSpecies = model.speciesId || 'sleeping-seed';
+    visual.dataset.growthSilhouette = model.silhouette;
+    visual.dataset.growthContinuous = String(model.detail === 'continuous');
+    visual.style.setProperty('--growth-branch-reach', String(geometry.branchReach));
+    visual.style.setProperty('--growth-branch-opacity', String(.08 + branchFraction * .82));
+    visual.style.setProperty('--growth-crown-scale', String(.46 + foliageFraction * .54));
+    visual.style.setProperty('--growth-crown-opacity', String(.12 + foliageFraction * .88));
+    visual.style.setProperty('--growth-trunk-height', `${34 + branchFraction * 42}%`);
+    visual.style.setProperty('--growth-bloom-opacity', String(geometry.flowerCount ? .22 + bloomFraction * .78 : 0));
+    visual.style.setProperty('--growth-bloom-scale', String(.64 + bloomFraction * .36));
+    visual.style.setProperty('--growth-aura-opacity', String(.06 + geometry.auraStrength * .78));
+    visual.style.setProperty('--growth-light-shadow', `${Math.round(3 + geometry.lightIntensity * 23)}px`);
+    ui.livingCarouselStage.style.setProperty('--growth-stage-aura-opacity', String(.24 + geometry.auraStrength * .55));
+    ui.livingCarouselStage.dataset.growthStage = model.stage.name.toLowerCase().replace(/\s+/g, '-');
+    ui.livingCarouselGrowthStage.textContent = model.stage.name;
+
+    const branchCount = model.kind === 'tree'
+      ? Math.ceil(ui.livingCarouselTreeBranches.length * branchFraction)
+      : 0;
+    const bloomCount = model.kind === 'tree'
+      ? Math.ceil(ui.livingCarouselTreeBlooms.length * bloomFraction)
+      : 0;
+    setPooledVisibility(ui.livingCarouselTreeBranches, branchCount);
+    setPooledVisibility(ui.livingCarouselTreeBlooms, bloomCount);
+    setPooledVisibility(ui.livingCarouselTreeAuraRings, model.everbloom.renderTier);
+
+    const exactRings = model.everbloom.rings;
+    if (ui.livingCarouselEverbloom) {
+      ui.livingCarouselEverbloom.hidden = exactRings === 0;
+      ui.livingCarouselEverbloom.textContent = exactRings === 1
+        ? 'EVERBLOOM RING 1'
+        : `EVERBLOOM RINGS ${formatNumber(exactRings)}`;
+    }
+    const positionLabel = String(entry?.position || 1).padStart(2, '0');
+    visual.setAttribute(
+      'aria-label',
+      model.kind === 'sleeping-seed'
+        ? `Sleeping Tree ${positionLabel}. No game has been announced.`
+        : `${entry.tree} at ${model.stage.name} growth${exactRings ? ` with ${formatNumber(exactRings)} Everbloom ${exactRings === 1 ? 'ring' : 'rings'}` : ''}.`
+    );
+    if (ui.livingCarousel) {
+      ui.livingCarousel.dataset.growthVisualState = 'deterministic';
+      ui.livingCarousel.dataset.growthStageIndex = stageIndex === null ? 'sleeping' : String(stageIndex);
+    }
+    return true;
+  }
+
+  function renderSelectedGrowthModel(entry, canonicalTotal, unlocked = true) {
+    if (!growthVisuals || growthVisualsFailed) return false;
+    try {
+      if (entry?.gameId && !unlocked) {
+        ui.livingCarouselTreeVisual.dataset.growthSpecies = 'sleeping-seed';
+        ui.livingCarouselTreeVisual.dataset.growthSilhouette = 'sleeping-seed';
+        ui.livingCarouselTreeVisual.dataset.growthContinuous = 'false';
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-branch-reach', '0');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-branch-opacity', '0');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-crown-scale', '.46');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-crown-opacity', '.12');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-trunk-height', '34%');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-bloom-opacity', '0');
+        ui.livingCarouselTreeVisual.style.setProperty('--growth-aura-opacity', '.06');
+        ui.livingCarouselStage.style.setProperty('--growth-stage-aura-opacity', '.24');
+        setPooledVisibility(ui.livingCarouselTreeBranches, 0);
+        setPooledVisibility(ui.livingCarouselTreeBlooms, 0);
+        setPooledVisibility(ui.livingCarouselTreeAuraRings, 0);
+        ui.livingCarouselEverbloom.hidden = true;
+        ui.livingCarousel.dataset.growthVisualState = 'deterministic';
+        ui.livingCarousel.dataset.growthStageIndex = 'sleeping';
+        return true;
+      }
+      const transferTotal = activeGrowthTransfer?.descriptor.gameId === entry?.gameId
+        ? activeGrowthTransfer.state.displayTotal
+        : canonicalTotal;
+      const model = modelForCarouselEntry(entry, transferTotal);
+      if (!model) throw new Error('The deterministic tree model was unavailable.');
+      return applyGrowthVisualModel(model, entry);
+    } catch (error) {
+      return failGrowthVisuals(error);
+    }
+  }
+
+  function growthTransferLabel(feedback) {
+    if (feedback?.isPersonalBest) return 'SAVED · NEW BEST';
+    if (feedback?.matchedBest) return 'SAVED · BEST MATCHED';
+    if (feedback?.nearBest) return 'SAVED · NEAR BEST';
+    return 'SAVED';
+  }
+
+  function queueGrowthTransfer(context) {
+    if (trialSession?.active || context?.result?.score <= 0) return false;
+    const gameId = context.gameId;
+    const fromTotal = safeInteger(context.previousTotal);
+    const toTotal = safeInteger(profile.games?.[gameId]?.totalScore);
+    if (!GAMES[gameId] || toTotal <= fromTotal) return false;
+    pendingGrowthTransfer = Object.freeze({
+      gameId,
+      modeId: gameId === 'lumenloom' ? activeLumenloomModeId || 'standard' : null,
+      fromTotal,
+      toTotal,
+      delta: toTotal - fromTotal,
+      label: growthTransferLabel(context.feedback)
+    });
+    return true;
+  }
+
+  function updateGrowthTransferSurface(force = false) {
+    if (!activeGrowthTransfer || !ui.livingCarouselTransfer) return false;
+    const transfer = activeGrowthTransfer.state;
+    const writeStep = transfer.status === 'complete'
+      ? SCORE_COUNT_MAX_WRITES
+      : Math.min(SCORE_COUNT_MAX_WRITES, Math.floor(transfer.progress * SCORE_COUNT_MAX_WRITES));
+    if (!force && writeStep === activeGrowthTransfer.lastWriteStep) return false;
+    activeGrowthTransfer.lastWriteStep = writeStep;
+    ui.livingCarouselTransferLabel.textContent = activeGrowthTransfer.descriptor.label;
+    ui.livingCarouselTransferScore.textContent = `+${formatNumber(activeGrowthTransfer.descriptor.delta)}`;
+    ui.livingCarouselTransferTotal.textContent = `TREE TOTAL ${formatNumber(transfer.displayTotal)}`;
+    ui.livingCarouselTransfer.dataset.transferState = transfer.status;
+    ui.livingCarouselTransfer.classList.toggle('is-streaming', transfer.status === 'running' && transfer.moteCount > 0);
+    const moteCapacity = growthVisuals.RENDER_CAPS[transfer.deviceClass].scoreMotes;
+    ui.livingCarouselTransferMotes.forEach((mote, index) => {
+      mote.hidden = index >= moteCapacity;
+      mote.classList.toggle('is-active', index < transfer.moteCount);
+    });
+
+    const entry = carousel?.REGISTRY?.find((candidate) => candidate.gameId === transfer.gameId);
+    try {
+      const model = modelForCarouselEntry(entry, transfer.displayTotal);
+      if (!model) throw new Error('The score transfer tree model was unavailable.');
+      applyGrowthVisualModel(model, entry);
+    } catch (error) {
+      failGrowthVisuals(error, activeGrowthTransfer.descriptor);
+      return false;
+    }
+    return true;
+  }
+
+  function presentPendingVisitHarmony() {
+    if (!pendingVisitHarmony || activeGameId || currentCeremony || activeGrowthTransfer) return false;
+    pendingVisitHarmony = false;
+    rendererState.growthPulse = reducedMotion ? 0 : .8;
+    rendererState.growthPulseColor = '#ffd773';
+    ui.firstTree?.classList.remove('is-harmony-received');
+    ui.livingCarouselHarmony?.classList.remove('is-harmony-received');
+    if (!reducedMotion) requestAnimationFrame(() => {
+      ui.firstTree?.classList.add('is-harmony-received');
+      ui.livingCarouselHarmony?.classList.add('is-harmony-received');
+    });
+    window.setTimeout(() => {
+      ui.firstTree?.classList.remove('is-harmony-received');
+      ui.livingCarouselHarmony?.classList.remove('is-harmony-received');
+    }, 900);
+    playGroveHarmony();
+    showToast('Grove Harmony awakened — three tree voices, one visit.', 3);
+    announceCarousel('Grove Harmony awakened. All three foundational trees were played this visit.');
+    return true;
+  }
+
+  function settleGrowthPresentation(returnGame, options = {}) {
+    presentPendingVisitHarmony();
+    if (ceremonyQueue.length) {
+      window.setTimeout(showNextCeremony, 100);
+    } else if (!options.suppressFocus && !activeGameId && !currentCeremony) {
+      window.setTimeout(() => focusGamePlayControl(returnGame || 'lumenloom'), 100);
+    }
+  }
+
+  function closeGrowthTransferSurface(active, options = {}) {
+    if (!active || activeGrowthTransfer !== active) return;
+    const retryHadFocus = document.activeElement === ui.livingCarouselTransferRetry;
+    hideGrowthTransferSurface();
+    activeGrowthTransfer = null;
+    renderLivingCarousel();
+    if (retryHadFocus && !options.suppressFocus && !ceremonyQueue.length) {
+      ui.livingCarouselPlayButton?.focus({ preventScroll: true });
+    }
+    settleGrowthPresentation(active.descriptor.gameId, { suppressFocus: Boolean(options.suppressFocus) });
+    if (options.announce === false) ui.livingCarouselTransferLive.textContent = '';
+  }
+
+  function finishGrowthTransfer(active) {
+    if (!active || activeGrowthTransfer !== active || active.settled) return;
+    active.settled = true;
+    updateGrowthTransferSurface(true);
+    rendererState.growthPulse = reducedMotion ? 0 : .9;
+    rendererState.growthPulseColor = GAMES[active.descriptor.gameId].color;
+    playTreeVoice(active.descriptor.gameId, 'growth');
+    ui.livingCarouselTransferLive.textContent = `${formatNumber(active.descriptor.delta)} points saved. ${GAMES[active.descriptor.gameId].tree} total is ${formatNumber(active.state.toTotal)}.`;
+    const elapsedMs = Math.max(0, performance.now() - active.presentationStartedAt);
+    const holdMs = Math.min(500, Math.max(0, growthVisuals.TRANSFER_MAX_DURATION_MS - elapsedMs));
+    growthTransferHideTimer = window.setTimeout(() => closeGrowthTransferSurface(active), holdMs);
+  }
+
+  function tickGrowthTransfer(now) {
+    if (!activeGrowthTransfer || activeGrowthTransfer.state.status !== 'running') return;
+    try {
+      activeGrowthTransfer.state = growthVisuals.reduceScoreTransfer(activeGrowthTransfer.state, {
+        type: 'tick',
+        nowMs: Math.max(0, Math.floor(now))
+      });
+      updateGrowthTransferSurface();
+      if (activeGrowthTransfer?.state.status === 'complete') finishGrowthTransfer(activeGrowthTransfer);
+    } catch (error) {
+      failGrowthVisuals(error);
+    }
+  }
+
+  function activatePendingGrowthTransfer(returningGame) {
+    if (!pendingGrowthTransfer || pendingGrowthTransfer.gameId !== returningGame) return false;
+    const descriptor = pendingGrowthTransfer;
+    pendingGrowthTransfer = null;
+    if (!growthVisuals || growthVisualsFailed || !carouselActive || !ui.livingCarouselTransfer) {
+      return failGrowthVisuals(null, descriptor);
+    }
+    try {
+      const startedAtMs = Math.max(0, Math.floor(performance.now()));
+      const transfer = growthVisuals.createScoreTransfer({
+        gameId: descriptor.gameId,
+        fromTotal: descriptor.fromTotal,
+        toTotal: descriptor.toTotal,
+        startedAtMs,
+        persisted: true,
+        ...growthRenderOptions()
+      });
+      if (!transfer) throw new Error('The saved score could not create a deterministic transfer.');
+      activeGrowthTransfer = {
+        descriptor,
+        state: transfer,
+        presentationStartedAt: startedAtMs,
+        lastWriteStep: -1,
+        settled: false
+      };
+      ui.livingCarouselTransfer.hidden = false;
+      ui.livingCarouselStage.classList.add('has-transfer');
+      ui.livingCarouselTransferRetry.setAttribute('aria-label', `Retry ${GAMES[descriptor.gameId].title}`);
+      updateGrowthTransferSurface(true);
+      requestAnimationFrame(() => {
+        if (activeGrowthTransfer?.descriptor === descriptor) ui.livingCarouselTransfer.classList.add('is-visible');
+      });
+      ui.livingCarouselTransferLive.textContent = `${formatNumber(descriptor.delta)} saved points are growing ${GAMES[descriptor.gameId].tree}.`;
+      if (transfer.status === 'complete') finishGrowthTransfer(activeGrowthTransfer);
+      return true;
+    } catch (error) {
+      return failGrowthVisuals(error, descriptor);
+    }
+  }
+
+  function skipGrowthTransfer(reason) {
+    const allowedReasons = growthVisuals?.TRANSFER_SKIP_REASONS || ['retry', 'play', 'tree-selection'];
+    if (!allowedReasons.includes(reason)) return false;
+    let skipped = false;
+    if (pendingGrowthTransfer) {
+      pendingGrowthTransfer = null;
+      skipped = true;
+    }
+    if (!activeGrowthTransfer) return skipped;
+    const active = activeGrowthTransfer;
+    try {
+      if (active.state.status === 'running') {
+        active.state = growthVisuals.reduceScoreTransfer(active.state, { type: 'skip', reason });
+        updateGrowthTransferSurface(true);
+      }
+    } catch (error) {
+      return failGrowthVisuals(error, active.descriptor);
+    }
+    closeGrowthTransferSurface(active, { announce: false, suppressFocus: true });
+    return true;
+  }
+
   function announceCarousel(message) {
     if (!ui.livingCarouselLive) return;
     ui.livingCarouselLive.textContent = '';
@@ -1711,6 +2005,7 @@
             ? `${entry.tree} at ${stage} growth.`
             : `${entry.tree} is sleeping. ${target}.`
       );
+      renderSelectedGrowthModel(entry, carouselView.totalScore, carouselView.unlocked);
       ui.livingCarouselBest.textContent = formatNumber(carouselView.best.display);
       ui.livingCarouselBest.title = carouselView.best.assisted > carouselView.best.standard
         ? `Standard best ${formatNumber(carouselView.best.standard)}; assisted best ${formatNumber(carouselView.best.assisted)}`
@@ -1883,7 +2178,9 @@
   function selectCarouselPosition(position, options = {}) {
     if (!carouselState || !carousel) return false;
     const previousPosition = carouselState.selectedPosition;
-    carouselState = carousel.selectPosition(carouselState, position);
+    const nextState = carousel.selectPosition(carouselState, position);
+    if (nextState.selectedPosition !== previousPosition) skipGrowthTransfer('tree-selection');
+    carouselState = nextState;
     if (!renderLivingCarousel()) return false;
     const selected = currentCarouselView();
     if (options.announce !== false) announceCarousel(carouselSelectionAnnouncement(selected));
@@ -1908,7 +2205,9 @@
 
   function showCarouselPage(page, options = {}) {
     if (!carouselState || !carousel) return;
-    carouselState = carousel.setPage(carouselState, page);
+    const nextState = carousel.setPage(carouselState, page);
+    if (nextState.rail.page !== carouselState.rail.page) skipGrowthTransfer('tree-selection');
+    carouselState = nextState;
     if (!renderLivingCarousel()) return;
     if (options.announce !== false) {
       const first = carouselState.rail.page * carousel.MOBILE_PAGE_SIZE + 1;
@@ -2008,11 +2307,7 @@
     event.preventDefault();
     const nextState = carousel.moveSelection(carouselState, direction);
     if (nextState === carouselState) return;
-    carouselState = nextState;
-    renderLivingCarousel();
-    const selected = currentCarouselView();
-    announceCarousel(carouselSelectionAnnouncement(selected));
-    if (selected?.selected.gameId) playTreeVoice(selected.selected.gameId, 'select');
+    selectCarouselPosition(nextState.selectedPosition);
   }
 
   function installLivingCarouselControls() {
@@ -2317,6 +2612,7 @@
       activeSessionId = null;
       return;
     }
+    skipGrowthTransfer(options.growthSkipReason || 'play');
     activeSession = gameId === 'lumenloom' ? null : created.session;
     activeLumenloomState = gameId === 'lumenloom' ? created.state : null;
     activeLumenloomModeId = gameId === 'lumenloom' ? requestedModeId : null;
@@ -2399,6 +2695,10 @@
     activeSessionId = null;
     restartRenderer(true);
 
+    if (returningGame && carousel && carouselState) {
+      carouselState = carousel.selectGame(carouselState, returningGame);
+    }
+
     if (options.cancelTrial && trialSession?.active) {
       trialSession = null;
       showToast('The Grove Trial was set aside. Completed tree scores remain safe.');
@@ -2408,9 +2708,15 @@
     buildSaplings();
     syncModalState();
     window.scrollTo(0, 0);
-    if (!options.suppressCeremonies && ceremonyQueue.length) {
+    const transferStarted = activatePendingGrowthTransfer(returningGame);
+    if (transferStarted) {
+      if (!options.suppressFocus) {
+        window.setTimeout(() => ui.livingCarouselTransferRetry?.focus({ preventScroll: true }), 100);
+      }
+    } else if (!options.suppressCeremonies && ceremonyQueue.length) {
       window.setTimeout(showNextCeremony, 120);
     } else if (!options.suppressFocus) {
+      presentPendingVisitHarmony();
       window.setTimeout(() => focusGamePlayControl(returningGame || 'lumenloom'), 100);
     }
   }
@@ -2581,6 +2887,7 @@
     }
     if (transitioned.code === 'action-accepted') {
       if (transitioned.effect === 'restart') {
+        skipGrowthTransfer('retry');
         setRunChromeActive(false);
         ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
       } else if (transitioned.effect === 'grove') {
@@ -2620,6 +2927,7 @@
   }
 
   function prepareForRun() {
+    skipGrowthTransfer('retry');
     setRunChromeActive(true);
     ui.returnButton.innerHTML = '<span aria-hidden="true">←</span> RETURN TO GROVE';
     ui.nextGameButton.classList.add('is-hidden');
@@ -2682,41 +2990,31 @@
       game,
       feedback,
       previousTotal,
-      oldGrowth,
       applied
     } = context;
-    const newGrowth = growthFor(gameId);
     const nextReward = progression.nextRewardFor(profile, gameId);
     const growthStages = applied.rewards.filter((reward) => reward.type === 'growth-stage');
-    const shouldShowRunGrowth = result.score > 0 && (!trialSession?.active || growthStages.length > 0);
     const harmonyAwakened = recordVisitCompletion(gameId, feedback);
-    if (shouldShowRunGrowth) {
+    const transferQueued = queueGrowthTransfer(context);
+    const highestGrowthStage = growthStages.at(-1);
+    if (highestGrowthStage) {
       enqueueCeremony({
-        type: 'run-growth',
+        type: 'growth-stage',
         gameId,
+        sourceGameId: gameId,
+        level: highestGrowthStage.level,
+        stage: highestGrowthStage.stage,
         added: result.score,
-        previousTotal,
         totalScore: profile.games[gameId].totalScore,
-        oldLevel: oldGrowth.level,
-        newLevel: newGrowth.level,
-        mastery: newGrowth.name,
-        nextReward,
-        priorBest: feedback?.priorBest || 0,
-        isPersonalBest: Boolean(feedback?.isPersonalBest),
-        matchedBest: Boolean(feedback?.matchedBest),
-        nearBest: Boolean(feedback?.nearBest),
-        gap: feedback?.gap || 0,
-        lane: feedback?.lane || (result.assisted ? 'assisted' : 'standard')
+        nextReward
       });
     }
     applied.rewards
       .filter((reward) => reward.type !== 'growth-stage')
       .forEach((reward) => enqueueCeremony({ ...reward, sourceGameId: gameId }));
-    if (harmonyAwakened) enqueueCeremony({ type: 'session-harmony', sourceGameId: gameId });
+    if (harmonyAwakened) pendingVisitHarmony = true;
     updateProfileUI();
     buildSaplings();
-    rendererState.growthPulse = reducedMotion ? 0 : 1;
-    rendererState.growthPulseColor = game.color;
 
     ui.returnButton.innerHTML = result.score > 0
       ? '<span aria-hidden="true">←</span> RETURN WITH SCORE'
@@ -2730,7 +3028,7 @@
           : result.score > 0
             ? `${formatNumber(result.score)} added to ${game.tree}.`
             : `The run completed. No points took root in ${game.tree} this time.`;
-    showToast(resultToast);
+    if (!transferQueued) showToast(resultToast);
 
     if (trialSession?.active) {
       trialSession.scores[gameId] = result.score;
@@ -2748,7 +3046,6 @@
   }
 
   function configureCeremony(ceremony) {
-    clearScorePresentation();
     const game = ceremony.gameId ? GAMES[ceremony.gameId] : null;
     const record = game ? profile.games[ceremony.gameId] : null;
     const gameReward = game ? progression.nextRewardFor(profile, ceremony.gameId) : null;
@@ -2765,36 +3062,21 @@
     ui.growthContinueButton.dataset.returnGame = ceremony.sourceGameId || ceremony.gameId || 'lumenloom';
     ui.growthContinueButton.querySelector('span').textContent = 'SEE THE GROVE';
 
-    if (ceremony.type === 'run-growth') {
-      const laneLabel = ceremony.lane === 'assisted' ? 'ASSISTED' : 'STANDARD';
-      let outcome = 'POINTS TOOK ROOT';
-      if (ceremony.isPersonalBest) outcome = ceremony.priorBest > 0
-        ? `NEW ${laneLabel} PERSONAL BEST · +${formatNumber(ceremony.added - ceremony.priorBest)}`
-        : `FIRST ${laneLabel} PERSONAL BEST`;
-      else if (ceremony.matchedBest) outcome = `MATCHED ${laneLabel} PERSONAL BEST`;
-      else if (ceremony.nearBest) outcome = `NEAR BEST · ${formatNumber(ceremony.gap)} AWAY`;
-      ui.growthPanel.classList.toggle('is-personal-best', ceremony.isPersonalBest);
-      ui.growthPanel.classList.toggle('is-near-best', ceremony.nearBest);
+    if (ceremony.type === 'growth-stage') {
       ui.growthOutcome.classList.remove('is-hidden');
-      ui.growthOutcome.textContent = outcome;
-      ui.ceremonyKicker.textContent = ceremony.isPersonalBest ? 'THE TREE REMEMBERS YOUR BEST' : 'THE GROVE REMEMBERS';
-      ui.growthTitle.textContent = ceremony.newLevel > ceremony.oldLevel
-        ? `${game.tree} reached ${ceremony.mastery}.`
-        : ceremony.isPersonalBest
-          ? `${game.tree} remembers a new best.`
-        : `${formatNumber(ceremony.added)} points took root.`;
-      ui.growthCopy.textContent = ceremony.newLevel > ceremony.oldLevel
-        ? 'Its cumulative score opened a permanent growth stage. Every completed run continues feeding this tree.'
-        : ceremony.nearBest
-          ? `This run joined the lifetime total and came within ${formatNumber(ceremony.gap)} of your ${ceremony.lane} best.`
-          : `This run joined the tree’s lifetime total. ${game.tree} is closer to its next permanent form.`;
+      ui.growthOutcome.textContent = 'PERMANENT TREE FORM';
+      ui.ceremonyKicker.textContent = 'NEW GROWTH STAGE';
+      ui.growthTitle.textContent = `${game.tree} reached ${ceremony.stage}.`;
+      ui.growthCopy.textContent = 'Its lifetime score opened a permanent new silhouette in the Living Carousel.';
       ui.growthRunLabel.textContent = 'RUN SCORE';
       ui.growthRunScore.textContent = formatNumber(ceremony.added);
       ui.growthScoreLabel.textContent = 'TREE TOTAL';
-      ui.growthScore.textContent = formatNumber(ceremony.previousTotal);
+      ui.growthScore.textContent = formatNumber(ceremony.totalScore);
       ui.growthMasteryLabel.textContent = 'GROWTH';
-      ui.growthMastery.textContent = ceremony.mastery;
-      ui.growthNextReward.textContent = [ceremony.nextReward?.growthLabel, ceremony.nextReward?.skillLabel].filter(Boolean).join(' · ') || 'KEEP GROWING';
+      ui.growthMastery.textContent = ceremony.stage;
+      ui.growthNextReward.textContent = [ceremony.nextReward?.growthLabel, ceremony.nextReward?.skillLabel]
+        .filter(Boolean)
+        .join(' · ') || 'KEEP GROWING';
       return;
     }
 
@@ -2873,15 +3155,11 @@
   }
 
   function showNextCeremony() {
-    if (currentCeremony || !ceremonyQueue.length) return;
+    if (activeGameId || activeGrowthTransfer || currentCeremony || !ceremonyQueue.length) return;
     currentCeremony = ceremonyQueue.shift();
     configureCeremony(currentCeremony);
     setOverlay(ui.growthOverlay, true);
-    if (currentCeremony.type === 'run-growth') {
-      startScorePresentation(currentCeremony);
-      const outcome = ui.growthOutcome.textContent ? ` ${ui.growthOutcome.textContent}.` : '';
-      announce(`${GAMES[currentCeremony.gameId].title} run score ${formatNumber(currentCeremony.added)}. Updated tree total ${formatNumber(currentCeremony.totalScore)}.${outcome}`);
-    } else announce(`${ui.ceremonyKicker.textContent}. ${ui.growthTitle.textContent}`);
+    announce(`${ui.ceremonyKicker.textContent}. ${ui.growthTitle.textContent}`);
     window.setTimeout(() => ui.growthContinueButton.focus(), 80);
   }
 
@@ -2908,7 +3186,6 @@
   }
 
   function finishCurrentCeremony(ceremony) {
-    clearScorePresentation(ceremony.type === 'run-growth' ? ceremony.totalScore : undefined);
     currentCeremony = null;
     setOverlay(ui.growthOverlay, false);
     updateProfileUI();
@@ -2929,6 +3206,7 @@
     }
     if (ceremonyQueue.length) window.setTimeout(showNextCeremony, 100);
     else {
+      presentPendingVisitHarmony();
       window.setTimeout(() => {
         focusGamePlayControl(returnGame);
       }, 100);
@@ -3850,11 +4128,15 @@
       maxActiveAudioNodes: audioQa.maxActiveNodes,
       lastAudioCue: audioQa.lastCue,
       activeCeremony: currentCeremony?.type || null,
-      scoreMoteCount: ui.scoreStream?.childElementCount || 0,
-      scoreCountActive: Boolean(scoreCounterFrame),
-      scoreCountDurationMs: SCORE_COUNT_DURATION_MS,
+      scoreMoteCount: ui.livingCarouselTransferMotes.filter((mote) => !mote.hidden).length,
+      scoreCountActive: activeGrowthTransfer?.state.status === 'running',
+      scoreCountDurationMs: activeGrowthTransfer?.state.durationMs || 0,
       scoreCountMaxWrites: SCORE_COUNT_MAX_WRITES,
-      moteCaps: Object.freeze({ desktop: SCORE_MOTE_CAP_DESKTOP, mobile: SCORE_MOTE_CAP_MOBILE, reducedMotion: 0 }),
+      moteCaps: Object.freeze({
+        desktop: growthVisuals?.RENDER_CAPS.desktop.scoreMotes || 0,
+        mobile: growthVisuals?.RENDER_CAPS.phone.scoreMotes || 0,
+        reducedMotion: 0
+      }),
       rewards: Object.freeze(rewards)
     });
   }
@@ -3879,7 +4161,7 @@
   }
 
   function finishSatisfactionEffectsForQa() {
-    clearScorePresentation(currentCeremony?.type === 'run-growth' ? currentCeremony.totalScore : undefined);
+    skipGrowthTransfer('tree-selection');
     document.querySelectorAll('.is-selecting, .is-score-received, .is-harmony-received')
       .forEach((element) => element.classList.remove('is-selecting', 'is-score-received', 'is-harmony-received'));
     return satisfactionSnapshot();
@@ -3902,6 +4184,7 @@
     const elapsed = Math.min(.25, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     pollLivingCarouselGamepads(now);
+    if (!document.hidden && !activeGameId) tickGrowthTransfer(now);
     const modalOpen = document.body.classList.contains('modal-open');
     const interactionPaused = view.mobileRenderer && now < rendererState.interactionQuietUntil;
     const animationPaused = activeGameId || document.hidden || interactionPaused
@@ -3992,7 +4275,17 @@
   ui.retryGameButton.addEventListener('click', () => {
     const gameId = activeGameId;
     const modeId = activeLumenloomModeId;
-    if (gameId) openGame(gameId, { modeId });
+    if (gameId) openGame(gameId, { modeId, growthSkipReason: 'retry' });
+  });
+  ui.livingCarouselTransferRetry?.addEventListener('click', () => {
+    const descriptor = activeGrowthTransfer?.descriptor;
+    if (!descriptor) return;
+    skipGrowthTransfer('retry');
+    trialSession = null;
+    openGame(descriptor.gameId, {
+      modeId: descriptor.modeId,
+      growthSkipReason: 'retry'
+    });
   });
   ui.stayInGameButton.addEventListener('click', () => {
     setOverlay(ui.returnConfirmOverlay, false);
@@ -4013,6 +4306,7 @@
     buildSaplings();
     if (ceremonyQueue.length) window.setTimeout(showNextCeremony, 100);
     else window.setTimeout(() => {
+      presentPendingVisitHarmony();
       if (carouselActive && !ui.livingCarouselTrialButton.hidden) {
         ui.livingCarouselTrialButton.focus({ preventScroll: true });
       } else {
@@ -4081,7 +4375,23 @@
   motionQuery?.addEventListener?.('change', (event) => {
     reducedMotion = event.matches;
     rendererState.growthPulse = reducedMotion ? 0 : rendererState.growthPulse;
-    if (reducedMotion && currentCeremony?.type === 'run-growth') clearScorePresentation(currentCeremony.totalScore);
+    if (reducedMotion && activeGrowthTransfer?.state.status === 'running') {
+      const active = activeGrowthTransfer;
+      const replacement = growthVisuals?.createScoreTransfer({
+        gameId: active.state.gameId,
+        fromTotal: active.state.displayTotal,
+        toTotal: active.state.toTotal,
+        startedAtMs: Math.max(0, Math.floor(performance.now())),
+        persisted: true,
+        deviceClass: active.state.deviceClass,
+        reducedMotion: true
+      });
+      if (replacement) {
+        active.state = replacement;
+        active.lastWriteStep = -1;
+        updateGrowthTransferSurface(true);
+      } else failGrowthVisuals(new Error('Reduced-motion transfer adaptation failed.'), active.descriptor);
+    }
     restartRenderer(true);
   });
   installFirstBloomControls();

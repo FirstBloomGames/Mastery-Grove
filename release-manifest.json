@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "First Bloom: The Mastery Grove",
-  "version": "0.4.0-rc.9",
+  "version": "0.4.0-rc.10",
   "channel": "release-candidate",
   "entrypoint": "index.html",
   "canonicalEntry": "MasteryGrove/index.html",
@@ -18,9 +18,9 @@
     "target-platform-technical-review",
     "uncoached-release-candidate-playtest"
   ],
-  "builtAt": "2026-07-19T04:34:00.106Z",
-  "fileCount": 44,
-  "hashedPayloadFileCount": 43,
+  "builtAt": "2026-07-21T03:18:53.540Z",
+  "fileCount": 45,
+  "hashedPayloadFileCount": 44,
   "files": [
     {
       "path": "Bloomfold/game.js",
@@ -29,8 +29,8 @@
     },
     {
       "path": "Bloomfold/index.html",
-      "bytes": 7878,
-      "sha256": "a1231ed30d4db0e6f4ecebdd395561894cef6bd643b4058d85a73f92931e7784"
+      "bytes": 7879,
+      "sha256": "7305a45cdc4528e462826a5cbe689a047debced29b43fd531857bdd3ad94a14d"
     },
     {
       "path": "Bloomfold/styles.css",
@@ -44,8 +44,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 894,
-      "sha256": "5bb24f2c37cf76d5ed2b4bfcccfc7d5172c48f6dd0d5632388bab1efb44b6868"
+      "bytes": 895,
+      "sha256": "3203a14dd0ba00b960b70cef02c0436d3e3ce1dcc7ed637892fd6f80f5106628"
     },
     {
       "path": "Lumenloom/game.js",
@@ -59,8 +59,8 @@
     },
     {
       "path": "Lumenloom/index.html",
-      "bytes": 10262,
-      "sha256": "0ff3ad286f7088021a254529e345f52cd2dd12bc68c46a17067c4c10da89ee7a"
+      "bytes": 10268,
+      "sha256": "afb8c4ee079e91b3bde3613eafabe3e106a807a80b55c0f457861794057eec02"
     },
     {
       "path": "Lumenloom/modes.js",
@@ -89,13 +89,18 @@
     },
     {
       "path": "MasteryGrove/grove.js",
-      "bytes": 173179,
-      "sha256": "5d8b7803f14ed6251b54cdbc5a4a8a09b0773187139690871b601da638a050f6"
+      "bytes": 187570,
+      "sha256": "597b628f7327897c455ef00dd1f95b22f50c004ba24c134f1dfeeaf32e62f902"
+    },
+    {
+      "path": "MasteryGrove/growth-visuals.js",
+      "bytes": 21772,
+      "sha256": "49ed15c621fb5835e433f0163665fd3557f5a914985dfe8c43b6edec52fa379e"
     },
     {
       "path": "MasteryGrove/index.html",
-      "bytes": 42242,
-      "sha256": "df3105e8238ae443d28d7277f305b1931c0e9192bd65f0b62b623f7020e412f1"
+      "bytes": 44046,
+      "sha256": "ee3a21a430c040b1aa8560d7e74d251083b0fe5a0363e0f584e5758e3b8eec9f"
     },
     {
       "path": "MasteryGrove/lumenloom-session.js",
@@ -119,8 +124,8 @@
     },
     {
       "path": "MasteryGrove/styles.css",
-      "bytes": 93283,
-      "sha256": "28cfbdd5e55f451710b1fc5b50e9d83768ab2380744b604e26054037c273a60c"
+      "bytes": 103578,
+      "sha256": "cc1ccb12771b179f4b85e75b51b1df79d4b462fc954e22dc4f872da70f14a1f1"
     },
     {
       "path": "Mothchorus/audio.js",
@@ -134,8 +139,8 @@
     },
     {
       "path": "Mothchorus/index.html",
-      "bytes": 8724,
-      "sha256": "1d64161ba7bc6554e81518bed8252acb1606efadb5e9073c6554c7948e80af60"
+      "bytes": 8725,
+      "sha256": "f85bd06458699d8681ecd83866feafb880a6fb0a9a3abaadf2080dd876cf5d0a"
     },
     {
       "path": "Mothchorus/input.js",
@@ -179,8 +184,8 @@
     },
     {
       "path": "Prismbind/index.html",
-      "bytes": 8794,
-      "sha256": "5d97bf168308209fd87636858c55eccbdd804418e7669ca214f64bdc9c2a9e7c"
+      "bytes": 8795,
+      "sha256": "2acf1be01978c8fadc08bc46dc40c4f7ffdaf48c9ac21c58a4d88b72745b680a"
     },
     {
       "path": "Prismbind/rules.js",
@@ -204,8 +209,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 7409,
-      "sha256": "eb67e1b5e8fc0f3e111ea29ac2b43e1db0b9801318547c568e20ec3366c52891"
+      "bytes": 7366,
+      "sha256": "dfb5661fd037afea0116eb6fed8e2d419da2f0ab6c020d2860aa2783e6865dc6"
     },
     {
       "path": "release-assets/favicon.svg",
@@ -219,8 +224,8 @@
     },
     {
       "path": "Ripplewake/index.html",
-      "bytes": 7312,
-      "sha256": "e1f9baddc19a47a1c5dc188619aca77f6f593875ae7068f72bdda843b393da6e"
+      "bytes": 7313,
+      "sha256": "0b4b8a0cd9b79166a900176a3214a5f279ad2bd00cd983f0aebc132d213f5800"
     },
     {
       "path": "Ripplewake/rules.js",
@@ -234,8 +239,8 @@
     },
     {
       "path": "version.json",
-      "bytes": 498,
-      "sha256": "40ff1acc59cf20ffcfb48e3a139f9ede0d6b1af523f5d85328dd12f01e44cb90"
+      "bytes": 499,
+      "sha256": "f02a0771259546247513066872818966b6e32c3c096e7816f35793e035801de1"
     }
   ]
 }

@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070817">
   <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
-  <meta name="first-bloom-release" content="0.4.0-rc.9">
+  <meta name="first-bloom-release" content="0.4.0-rc.10">
   <title>First Bloom: The Mastery Grove</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.9">
+  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.10">
 </head>
 <body>
   <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
@@ -60,16 +60,41 @@
 
           <div id="livingCarouselStage" class="living-carousel-stage" data-growth-stage="seed" aria-describedby="livingCarouselStageLabel">
             <div id="livingCarouselTreeVisual" class="living-carousel-tree-visual" role="img" aria-label="The Lantern Willow at Seed growth">
+              <span class="living-carousel-tree-aura" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+              <span class="living-carousel-tree-branches" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
               <span class="living-carousel-tree-symbol" aria-hidden="true">✦</span>
               <i class="living-carousel-tree-trunk" aria-hidden="true"></i>
               <i class="living-carousel-tree-crown crown-left" aria-hidden="true"></i>
               <i class="living-carousel-tree-crown crown-center" aria-hidden="true"></i>
               <i class="living-carousel-tree-crown crown-right" aria-hidden="true"></i>
+              <span class="living-carousel-tree-blooms" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
             </div>
             <div id="livingCarouselStageLabel" class="living-carousel-stage-label">
               <span>GROWTH</span>
               <strong id="livingCarouselGrowthStage">SEED</strong>
+              <small id="livingCarouselEverbloom" hidden>EVERBLOOM RING 0</small>
             </div>
+            <div id="livingCarouselTransfer" class="living-carousel-transfer" hidden>
+              <div class="living-carousel-transfer-copy">
+                <span id="livingCarouselTransferLabel">SAVED</span>
+                <strong id="livingCarouselTransferScore">+0</strong>
+                <small id="livingCarouselTransferTotal">TREE TOTAL 0</small>
+              </div>
+              <button id="livingCarouselTransferRetry" type="button" aria-label="Retry the selected game">RETRY</button>
+              <span id="livingCarouselTransferMotes" class="living-carousel-transfer-motes" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+            </div>
+            <div id="livingCarouselTransferLive" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
           </div>
 
           <div class="living-carousel-command">
@@ -424,7 +449,6 @@
 
     <section id="growthOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="growthTitle" aria-describedby="growthCopy" aria-hidden="true" inert>
       <div id="growthPanel" class="growth-panel ornate-panel">
-        <div id="scoreStream" class="score-stream" aria-hidden="true"></div>
         <span id="growthSymbol" class="growth-symbol" aria-hidden="true">✦</span>
         <span id="ceremonyKicker" class="eyebrow">THE GROVE REMEMBERS</span>
         <h2 id="growthTitle">A branch has awakened.</h2>
@@ -491,7 +515,7 @@
         <div class="release-info-grid">
           <section class="release-info-card release-build-card" aria-labelledby="releaseBuildHeading">
             <span id="releaseBuildHeading" class="release-info-label">CURRENT BUILD</span>
-            <strong id="releaseBuildIdentity">0.4.0-rc.9</strong>
+            <strong id="releaseBuildIdentity">0.4.0-rc.10</strong>
             <small>Release candidate · web build</small>
           </section>
 
@@ -571,13 +595,14 @@
 
   <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
 
-  <script src="../Lumenloom/modes.js?v=0.4.0-rc.9"></script>
-  <script src="protocol-v2.js?v=0.4.0-rc.9"></script>
-  <script src="progression.js?v=0.4.0-rc.9"></script>
-  <script src="lumenloom-session.js?v=0.4.0-rc.9"></script>
-  <script src="profile-storage.js?v=0.4.0-rc.9"></script>
-  <script src="first-bloom.js?v=0.4.0-rc.9"></script>
-  <script src="carousel.js?v=0.4.0-rc.9"></script>
-  <script src="grove.js?v=0.4.0-rc.9"></script>
+  <script src="../Lumenloom/modes.js?v=0.4.0-rc.10"></script>
+  <script src="protocol-v2.js?v=0.4.0-rc.10"></script>
+  <script src="progression.js?v=0.4.0-rc.10"></script>
+  <script src="growth-visuals.js?v=0.4.0-rc.10"></script>
+  <script src="lumenloom-session.js?v=0.4.0-rc.10"></script>
+  <script src="profile-storage.js?v=0.4.0-rc.10"></script>
+  <script src="first-bloom.js?v=0.4.0-rc.10"></script>
+  <script src="carousel.js?v=0.4.0-rc.10"></script>
+  <script src="grove.js?v=0.4.0-rc.10"></script>
 </body>
 </html>
