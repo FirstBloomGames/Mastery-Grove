@@ -1,0 +1,21 @@
+{
+  "name": "First Bloom: The Mastery Grove",
+  "short_name": "Mastery Grove",
+  "description": "Master tiny arcade games and grow a living world.",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070817",
+  "theme_color": "#070817",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "release-assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

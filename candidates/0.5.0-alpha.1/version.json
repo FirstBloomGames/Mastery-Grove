@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "product": "First Bloom: The Mastery Grove",
+  "version": "0.5.0-alpha.1",
+  "channel": "release-candidate",
+  "entrypoint": "index.html",
+  "canonicalEntry": "MasteryGrove/index.html",
+  "games": [
+    "Lumenloom",
+    "Bloomfold",
+    "Ripplewake",
+    "Prismbind",
+    "Mothchorus"
+  ],
+  "reviewGates": [
+    "privacy-owner-and-legal-review",
+    "credits-and-rights-owner-review",
+    "target-platform-technical-review",
+    "physical-phone-and-shared-ipad-validation",
+    "ten-unfamiliar-player-living-arcade-pilot"
+  ]
+}
