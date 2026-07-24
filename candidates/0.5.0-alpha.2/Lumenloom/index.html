@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en" class="profile-desktop" data-control-profile="desktop" data-orientation="landscape">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#09091d">
+  <meta name="description" content="Lumenloom — weave light through a moonlit garden in this original arcade game from First Bloom Games.">
+  <title>Lumenloom — A First Bloom Games Original</title>
+  <link rel="stylesheet" href="styles.css?v=0.5.0-alpha.2">
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+  <meta name="first-bloom-release" content="0.5.0-alpha.2">
+</head>
+<body>
+  <main id="app" aria-label="Lumenloom game">
+    <canvas id="game" tabindex="0" aria-label="Lumenloom playfield"></canvas>
+    <div class="world-fx" aria-hidden="true"></div>
+
+    <section id="hud" class="hud is-hidden" aria-label="Game status">
+      <div class="hud-top">
+        <div class="phase-block glass">
+          <span class="eyebrow">NIGHT PHASE</span>
+          <strong id="phaseName">FIRST STITCH</strong>
+        </div>
+
+        <div class="score-block">
+          <span class="eyebrow">SCORE</span>
+          <strong id="scoreValue">0</strong>
+          <span id="bestValue" class="best-value">BEST 0</span>
+        </div>
+
+        <div class="hud-actions glass">
+          <button id="soundButton" class="icon-button" type="button" aria-label="Mute sound" title="Mute sound (M)">
+            <span id="soundIcon" aria-hidden="true">♪</span>
+          </button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" title="Fullscreen">
+            <span aria-hidden="true">⛶</span>
+          </button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" title="Pause (P)">
+            <span aria-hidden="true">Ⅱ</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="objectiveCard" class="objective-card glass">
+        <span id="objectiveKicker" class="eyebrow">THE GARDEN REMEMBERS</span>
+        <div class="objective-row">
+          <span class="objective-mark" aria-hidden="true">&#10022;</span>
+          <strong id="objectiveText">Find a flower and take up the thread</strong>
+          <span id="objectiveProgress">0 / 1</span>
+        </div>
+        <div class="objective-track"><i id="objectiveFill"></i></div>
+      </div>
+
+      <div class="resource-stack glass" role="group" aria-label="Loomwing lumen and health">
+        <div class="resource-line">
+          <span class="resource-label">LUMEN</span>
+          <div class="resource-track"><i id="lumenFill"></i></div>
+          <span id="lumenValue" class="resource-number">100</span>
+        </div>
+        <div class="resource-line petals-line health-line">
+          <span class="resource-label health-label">HEALTH</span>
+          <div id="petalDisplay" class="petals" aria-label="Health, 3 of 3 petals">
+            <span>◆</span><span>◆</span><span>◆</span>
+          </div>
+          <div class="health-readout">
+            <span id="healthValue" class="health-value">3 / 3</span>
+            <span id="wardIndicator" class="ward-indicator is-hidden">WARD</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="comboBadge" class="combo-badge is-hidden">
+        <span id="comboValue">×1.25</span>
+        <small>CHAIN WEAVE</small>
+      </div>
+
+      <div class="controls-hint glass">
+        <span><kbd>WASD</kbd> / <kbd>ARROWS</kbd> glide</span>
+        <span><kbd>SPACE</kbd> weave / cancel</span>
+        <span><kbd>P</kbd> pause</span>
+      </div>
+
+      <div id="mobileMoveZone" class="mobile-move-zone" aria-hidden="true">
+        <div class="mobile-move-guide">
+          <span class="mobile-move-star">&#10022;</span>
+        </div>
+        <div id="mobileStick" class="mobile-stick">
+          <span id="mobileStickKnob" class="mobile-stick-knob"></span>
+        </div>
+      </div>
+
+      <button id="weaveButton" class="weave-button" type="button" aria-label="Weave light">
+        <span class="weave-icon weave-icon-open" aria-hidden="true">&#10022;</span>
+        <span class="weave-icon weave-icon-close" aria-hidden="true">&#9671;</span>
+        <span class="weave-copy">
+          <small><span class="weave-mode-open">THREAD</span><span class="weave-mode-close">CLOSE LOOP</span></small>
+          <span id="weaveButtonLabel">WEAVE</span>
+        </span>
+      </button>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="phaseBanner" class="phase-banner" aria-live="polite">
+      <span id="phaseBannerKicker">THE FIRST THREAD</span>
+      <strong id="phaseBannerTitle">FIRST STITCH</strong>
+      <small id="phaseBannerSubtitle">Every garden begins with one brave line of light.</small>
+    </div>
+
+    <section id="startOverlay" class="overlay is-visible" role="dialog" aria-modal="true" aria-labelledby="lumenloomTitle">
+      <div class="start-stars" aria-hidden="true"></div>
+      <div class="panel start-panel">
+        <div class="studio-mark"><span class="sprout-mark">✦</span> FIRST BLOOM GAMES ORIGINAL</div>
+        <h1 id="lumenloomTitle">LUMEN<span>LOOM</span></h1>
+        <p class="tagline">Weave the light. Wake the garden.</p>
+        <p class="premise">The Hollow has swallowed every color before dawn. You are the last little loomwing—and light becomes real wherever your thread closes.</p>
+
+        <div class="how-to how-to-desktop">
+          <article>
+            <span class="step-number">01</span>
+            <div><strong>GLIDE</strong><small>Use WASD, arrows, or guide with your mouse.</small></div>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <div><strong>STITCH</strong><small>Near a flower, tap Space or click to begin.</small></div>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <div><strong>SEAL</strong><small>Pin 3+ flowers, then return to the golden first bloom.</small></div>
+          </article>
+        </div>
+
+        <div class="how-to how-to-mobile" aria-label="Touch controls">
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">&#8599;</span>
+            <div><strong>GLIDE</strong><small>Drag anywhere</small></div>
+          </article>
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">&#10022;</span>
+            <div><strong>WEAVE</strong><small>Tap WEAVE by a bloom</small></div>
+          </article>
+          <article>
+            <span class="mobile-step-icon" aria-hidden="true">3+</span>
+            <div><strong>SEAL</strong><small>Return to gold</small></div>
+          </article>
+        </div>
+
+        <button id="playButton" class="primary-button" type="button">
+          <span class="mobile-button-copy">BEGIN</span>
+          <span>ENTER THE NIGHT GARDEN</span><i aria-hidden="true">→</i>
+        </button>
+        <div class="start-footer">
+          <span id="startBest">PERSONAL BEST · 0</span>
+          <span>TYPICAL RUN: 3–5 MINUTES · HEADPHONES LOVELY</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" aria-hidden="true" inert>
+      <div class="panel compact-panel">
+        <span class="panel-symbol" aria-hidden="true">☾</span>
+        <span class="eyebrow">THE NIGHT IS WAITING</span>
+        <h2 id="pauseTitle">Paused</h2>
+        <p>Your thread will hold until you return.</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>RETURN TO THE GARDEN</span><i>→</i></button>
+        <button id="pauseRestartButton" class="text-button" type="button">Restart this run</button>
+        <button id="quitButton" class="text-button" type="button">End this run</button>
+      </div>
+    </section>
+
+    <section id="blessingOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="blessingTitle" aria-hidden="true" inert>
+      <div class="panel blessing-panel">
+        <span class="eyebrow">THE GARDEN ANSWERS</span>
+        <h2 id="blessingTitle">Choose a blessing</h2>
+        <p>One small kindness for the darker road ahead.</p>
+        <div id="blessingChoices" class="blessing-choices"></div>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-hidden="true" inert>
+      <div class="panel result-panel">
+        <span id="resultSymbol" class="result-symbol" aria-hidden="true">✦</span>
+        <span id="resultKicker" class="eyebrow">DAWN REMEMBERS YOUR NAME</span>
+        <h2 id="resultTitle">The garden wakes.</h2>
+        <p id="resultCopy">Every closed thread became a place where morning could begin.</p>
+
+        <div class="rank-row">
+          <span>WEAVER RANK</span>
+          <strong id="resultRank">MOONWEAVER</strong>
+        </div>
+        <div class="result-stats">
+          <article><span>SCORE</span><strong id="resultScore">0</strong></article>
+          <article><span id="resultBestLabel">BEST</span><strong id="resultBest">0</strong></article>
+          <article><span>LOOPS</span><strong id="resultLoops">0</strong></article>
+          <article><span>SHADOWS</span><strong id="resultShadows">0</strong></article>
+        </div>
+
+        <button id="replayButton" class="primary-button" type="button"><span>WEAVE ANOTHER NIGHT</span><i>↻</i></button>
+        <button id="homeButton" class="text-button" type="button">Return to title</button>
+      </div>
+    </section>
+
+    <div id="rotateNotice" class="rotate-notice">
+      <span aria-hidden="true">↻</span>
+      <strong>Turn upright</strong>
+      <small>Lumenloom blooms in portrait.</small>
+    </div>
+  </main>
+  <script src="modes.js?v=0.5.0-alpha.2"></script>
+  <script src="../MasteryGrove/protocol-v2.js?v=0.5.0-alpha.2"></script>
+  <script src="grove-protocol-v2.js?v=0.5.0-alpha.2"></script>
+  <script src="game.js?v=0.5.0-alpha.2"></script>
+</body>
+</html>

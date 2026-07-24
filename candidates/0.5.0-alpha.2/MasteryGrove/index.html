@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070817">
+  <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
+  <meta name="first-bloom-release" content="0.5.0-alpha.2">
+  <title>First Bloom: The Mastery Grove</title>
+  <link rel="stylesheet" href="styles.css?v=0.5.0-alpha.2">
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+</head>
+<body>
+  <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
+    <canvas id="groveCanvas" aria-hidden="true"></canvas>
+    <div class="sky-veil" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <section id="groveScreen" class="grove-screen">
+      <header class="grove-header">
+        <div class="brand-lockup">
+          <span class="brand-seal" aria-hidden="true">✦</span>
+          <div>
+            <span class="eyebrow">FIRST BLOOM GAMES</span>
+            <strong>THE MASTERY GROVE</strong>
+          </div>
+        </div>
+
+        <div class="keeper-readout glass">
+          <span class="eyebrow">GROVE RANK</span>
+          <strong id="headerRank">FIRST SPROUT</strong>
+          <span id="headerBloomCount">0 / 15 BLOOM MARKS</span>
+        </div>
+
+        <button id="settingsButton" class="icon-button glass" type="button" aria-label="Open grove settings" title="Grove settings">⚙</button>
+      </header>
+
+      <div id="storageWarning" class="storage-warning is-hidden" role="alert">
+        <strong>LOCAL PROGRESS NEEDS ATTENTION</strong>
+        <span id="storageWarningText">This browser could not confirm durable storage. Export your profile before continuing.</span>
+      </div>
+
+      <section id="livingCarousel" class="living-carousel" role="region" aria-roledescription="carousel" aria-labelledby="livingCarouselTitle" aria-describedby="livingCarouselInstructions" aria-hidden="true" data-carousel-state="shadow" data-carousel-position="1" hidden inert>
+        <h1 id="livingCarouselTitle" class="visually-hidden">Living Carousel</h1>
+        <p id="livingCarouselInstructions" class="visually-hidden">Choose any of ten trees. Locked and sleeping trees can be inspected, but only an awake tree can be played.</p>
+
+        <div class="living-carousel-shell">
+          <header class="living-carousel-selected-header">
+            <div class="living-carousel-identity">
+              <span id="livingCarouselNumber" class="eyebrow">TREE 01</span>
+              <strong id="livingCarouselGame">LUMENLOOM</strong>
+              <span id="livingCarouselSpecies">THE LANTERN WILLOW</span>
+            </div>
+            <div class="living-carousel-utilities">
+              <span id="livingCarouselRank" class="living-carousel-status-chip" aria-label="Grove rank First Sprout">FIRST SPROUT</span>
+              <span id="livingCarouselSeeds" class="living-carousel-status-chip" aria-label="Zero of three foundational Mastery Seeds earned">0 / 3 SEEDS</span>
+              <button id="livingCarouselHelpButton" class="living-carousel-utility" type="button" aria-label="Help for Lumenloom" hidden><span aria-hidden="true">?</span><span class="visually-hidden">HELP</span></button>
+              <button id="livingCarouselJournalButton" class="living-carousel-utility" type="button" aria-label="Open the Lantern Willow journal" hidden><span aria-hidden="true">☷</span><span class="visually-hidden">JOURNAL</span></button>
+            </div>
+          </header>
+
+          <div id="livingCarouselStage" class="living-carousel-stage" data-growth-stage="seed" aria-describedby="livingCarouselStageLabel">
+            <div id="livingCarouselTreeVisual" class="living-carousel-tree-visual" role="img" aria-label="The Lantern Willow at Seed growth">
+              <span class="living-carousel-tree-aura" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+              <span class="living-carousel-tree-branches" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+              <span class="living-carousel-tree-symbol" aria-hidden="true">✦</span>
+              <i class="living-carousel-tree-trunk" aria-hidden="true"></i>
+              <i class="living-carousel-tree-crown crown-left" aria-hidden="true"></i>
+              <i class="living-carousel-tree-crown crown-center" aria-hidden="true"></i>
+              <i class="living-carousel-tree-crown crown-right" aria-hidden="true"></i>
+              <span class="living-carousel-tree-blooms" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+            </div>
+            <div id="livingCarouselStageLabel" class="living-carousel-stage-label">
+              <span>GROWTH</span>
+              <strong id="livingCarouselGrowthStage">SEED</strong>
+              <small id="livingCarouselEverbloom" hidden>EVERBLOOM RING 0</small>
+            </div>
+            <div id="livingCarouselTransfer" class="living-carousel-transfer" hidden>
+              <div class="living-carousel-transfer-copy">
+                <span id="livingCarouselTransferLabel">SAVED</span>
+                <strong id="livingCarouselTransferScore">+0</strong>
+                <small id="livingCarouselTransferTotal">TREE TOTAL 0</small>
+              </div>
+              <button id="livingCarouselTransferRetry" type="button" aria-label="Retry the selected game">RETRY</button>
+              <span id="livingCarouselTransferMotes" class="living-carousel-transfer-motes" aria-hidden="true">
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+                <i hidden></i><i hidden></i><i hidden></i><i hidden></i><i hidden></i>
+              </span>
+            </div>
+            <div id="livingCarouselTransferLive" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+          </div>
+
+          <div class="living-carousel-command">
+            <div class="living-carousel-metrics" aria-label="Selected tree scores">
+              <div><span>BEST</span><strong id="livingCarouselBest">0</strong></div>
+              <div><span>TARGET</span><strong id="livingCarouselTarget">1,000 TO BUD</strong></div>
+            </div>
+
+            <div id="livingCarouselModes" class="living-carousel-modes" role="radiogroup" aria-label="Lumenloom modes">
+              <button id="livingCarouselModeStandard" class="living-carousel-mode" type="button" role="radio" data-carousel-mode="standard" aria-checked="false" aria-label="Night Garden, Standard mode" tabindex="-1">
+                <i aria-hidden="true">☾</i><span>STANDARD</span>
+              </button>
+              <button id="livingCarouselModePetalRush" class="living-carousel-mode is-selected" type="button" role="radio" data-carousel-mode="petalRush" aria-checked="true" aria-label="Petal Rush, Quick Bloom mode" tabindex="0">
+                <i aria-hidden="true">✦</i><span>PETAL</span>
+              </button>
+              <button id="livingCarouselModeShifting" class="living-carousel-mode is-locked" type="button" role="radio" data-carousel-mode="shiftingConstellation" aria-checked="false" aria-disabled="true" aria-label="Shifting Constellation, locked until Silver" tabindex="-1">
+                <i aria-hidden="true">◇</i><span>SHIFTING</span>
+              </button>
+              <button id="livingCarouselModeHollow" class="living-carousel-mode is-locked" type="button" role="radio" data-carousel-mode="hollowRush" aria-checked="false" aria-disabled="true" aria-label="Hollow Rush, locked until Gold" tabindex="-1">
+                <i aria-hidden="true">◆</i><span>HOLLOW</span>
+              </button>
+            </div>
+
+            <button id="livingCarouselPlayButton" class="living-carousel-play" type="button" aria-label="Play Petal Rush in Lumenloom" aria-describedby="livingCarouselTarget" aria-disabled="true">
+              <span>PLAY</span><i aria-hidden="true">→</i>
+            </button>
+
+            <div class="living-carousel-session">
+              <button id="livingCarouselTrialButton" class="living-carousel-trial" type="button" aria-label="Threefold Trial locked. Complete Lumenloom, Bloomfold, and Ripplewake." aria-disabled="true">
+                <span>TRIAL</span><strong id="livingCarouselTrialStatus">LOCKED</strong>
+              </button>
+              <div id="livingCarouselHarmony" class="living-carousel-harmony" role="status" aria-label="Visit Harmony, zero of three foundational trees played">
+                <span>THIS VISIT</span><strong aria-hidden="true">○ ○ ○</strong>
+              </div>
+            </div>
+          </div>
+
+          <nav class="living-carousel-navigation" aria-label="Choose a tree">
+            <p class="living-carousel-navigation-heading">CHOOSE GAME</p>
+            <div id="livingCarouselRail" class="living-carousel-rail" role="listbox" aria-label="Ten Mastery Grove trees" aria-orientation="horizontal" data-carousel-page="0">
+              <div class="living-carousel-pages">
+                <div class="living-carousel-page" role="presentation" data-carousel-page-group="0">
+                  <button id="livingCarouselTree01" class="living-carousel-option is-selected" type="button" role="option" data-carousel-position="1" data-carousel-game="lumenloom" aria-label="Tree 01, Lumenloom, the Lantern Willow" aria-selected="true" aria-posinset="1" aria-setsize="10" tabindex="0"><span aria-hidden="true">✦</span><small aria-hidden="true">01</small></button>
+                  <button id="livingCarouselTree02" class="living-carousel-option" type="button" role="option" data-carousel-position="2" data-carousel-game="bloomfold" aria-label="Tree 02, Bloomfold, the Recursive Orchid" aria-selected="false" aria-posinset="2" aria-setsize="10" tabindex="-1"><span aria-hidden="true">◇</span><small aria-hidden="true">02</small></button>
+                  <button id="livingCarouselTree03" class="living-carousel-option" type="button" role="option" data-carousel-position="3" data-carousel-game="ripplewake" aria-label="Tree 03, Ripplewake, the Echo Alder" aria-selected="false" aria-posinset="3" aria-setsize="10" tabindex="-1"><span aria-hidden="true">≋</span><small aria-hidden="true">03</small></button>
+                  <button id="livingCarouselTree04" class="living-carousel-option is-locked" type="button" role="option" data-carousel-position="4" data-carousel-game="prismbind" aria-label="Tree 04, Prismbind, the Concord Banyan, sleeping" aria-selected="false" aria-posinset="4" aria-setsize="10" tabindex="-1"><span aria-hidden="true">◆</span><small aria-hidden="true">04</small></button>
+                  <button id="livingCarouselTree05" class="living-carousel-option is-locked" type="button" role="option" data-carousel-position="5" data-carousel-game="mothchorus" aria-label="Tree 05, Mothchorus, the Choir Linden, sleeping" aria-selected="false" aria-posinset="5" aria-setsize="10" tabindex="-1"><span aria-hidden="true">♡</span><small aria-hidden="true">05</small></button>
+                </div>
+                <div class="living-carousel-page" role="presentation" data-carousel-page-group="1">
+                  <button id="livingCarouselTree06" class="living-carousel-option is-sleeping" type="button" role="option" data-carousel-position="6" aria-label="Sleeping Tree 06" aria-selected="false" aria-posinset="6" aria-setsize="10" tabindex="-1"><span aria-hidden="true">•</span><small aria-hidden="true">06</small></button>
+                  <button id="livingCarouselTree07" class="living-carousel-option is-sleeping" type="button" role="option" data-carousel-position="7" aria-label="Sleeping Tree 07" aria-selected="false" aria-posinset="7" aria-setsize="10" tabindex="-1"><span aria-hidden="true">•</span><small aria-hidden="true">07</small></button>
+                  <button id="livingCarouselTree08" class="living-carousel-option is-sleeping" type="button" role="option" data-carousel-position="8" aria-label="Sleeping Tree 08" aria-selected="false" aria-posinset="8" aria-setsize="10" tabindex="-1"><span aria-hidden="true">•</span><small aria-hidden="true">08</small></button>
+                  <button id="livingCarouselTree09" class="living-carousel-option is-sleeping" type="button" role="option" data-carousel-position="9" aria-label="Sleeping Tree 09" aria-selected="false" aria-posinset="9" aria-setsize="10" tabindex="-1"><span aria-hidden="true">•</span><small aria-hidden="true">09</small></button>
+                  <button id="livingCarouselTree10" class="living-carousel-option is-sleeping" type="button" role="option" data-carousel-position="10" aria-label="Sleeping Tree 10" aria-selected="false" aria-posinset="10" aria-setsize="10" tabindex="-1"><span aria-hidden="true">•</span><small aria-hidden="true">10</small></button>
+                </div>
+              </div>
+            </div>
+            <div id="livingCarouselPageDots" class="living-carousel-page-dots" role="group" aria-label="Tree rail pages">
+              <button id="livingCarouselPage1" type="button" data-carousel-page-button="0" aria-label="Show Trees 01 through 05" aria-pressed="true"><span aria-hidden="true"></span></button>
+              <button id="livingCarouselPage2" type="button" data-carousel-page-button="1" aria-label="Show Trees 06 through 10" aria-pressed="false"><span aria-hidden="true"></span></button>
+            </div>
+          </nav>
+
+          <div id="livingCarouselLive" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+        </div>
+      </section>
+
+      <section id="legacyCatalogue" class="grove-layout" aria-label="Grove game trees">
+        <section class="first-tree" aria-labelledby="groveTitle">
+          <span class="eyebrow">A LIVING ARCADE</span>
+          <h1 id="groveTitle">FIRST BLOOM</h1>
+          <p class="grove-tagline">Master tiny games. Grow a living world.</p>
+          <div class="tree-space" aria-hidden="true"></div>
+          <div class="tree-plaque glass">
+            <span class="plaque-symbol" aria-hidden="true">⌁</span>
+            <div>
+              <span class="eyebrow">THE FIRST TREE</span>
+              <strong id="groveRank">FIRST SPROUT</strong>
+              <p id="groveMessage">Three arcade seeds are awake. Every finished run feeds its own tree.</p>
+            </div>
+          </div>
+          <div id="visitHarmony" class="visit-harmony glass" aria-live="polite">
+            <span class="eyebrow">THIS VISIT</span>
+            <div class="visit-harmony-copy">
+              <strong id="visitHarmonyStatus">0 / 3 TREES TO GROVE HARMONY</strong>
+              <span class="visit-voice-pips" aria-hidden="true">
+                <i id="lumenloomVisitPip"></i><i id="bloomfoldVisitPip"></i><i id="ripplewakeVisitPip"></i>
+              </span>
+            </div>
+          </div>
+          <button id="trialButton" class="trial-button" type="button">
+            <span><small>THE FIRST GROVE TRIAL</small><strong id="trialLabel">COMPLETE ALL THREE TREES TO AWAKEN</strong></span>
+            <i aria-hidden="true">◇</i>
+          </button>
+        </section>
+
+        <article id="lumenloomCard" class="game-card lumenloom-card glass" data-game="lumenloom">
+          <div class="card-number">TREE 01</div>
+          <div class="game-emblem lumenloom-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><span>✦</span>
+          </div>
+          <span id="lumenloomVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE LANTERN WILLOW</span>
+          <h2>LUMENLOOM</h2>
+          <p>Stitch flowers into luminous shapes and wake a garden from shadow.</p>
+          <div class="mastery-line">
+            <div><span>GROWTH</span><strong id="lumenloomMastery">SEED</strong></div>
+            <div><span>TOTAL SCORE</span><strong id="lumenloomTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="lumenloomBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Lumenloom tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="lumenloomProgress"></i></div>
+          <div id="lumenloomNextReward" class="next-reward" aria-label="Lumenloom next rewards">
+            <span><small>NEXT GROWTH</small><strong id="lumenloomNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="lumenloomNextSkill">CALCULATING</strong></span>
+          </div>
+          <button class="enter-button" type="button" data-play="lumenloom"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
+          <small>TYPICAL RUN: 3–5 MINUTES · MOVE &amp; WEAVE</small>
+        </article>
+
+        <article id="bloomfoldCard" class="game-card bloomfold-card glass" data-game="bloomfold">
+          <div class="card-number">TREE 02</div>
+          <div class="game-emblem bloomfold-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><span>◇</span>
+          </div>
+          <span id="bloomfoldVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE RECURSIVE ORCHID</span>
+          <h2>BLOOMFOLD</h2>
+          <p>Orbit through a living fractal and preserve the pattern your choices create.</p>
+          <div class="mastery-line">
+            <div><span>GROWTH</span><strong id="bloomfoldMastery">SEED</strong></div>
+            <div><span>TOTAL SCORE</span><strong id="bloomfoldTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="bloomfoldBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Bloomfold tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="bloomfoldProgress"></i></div>
+          <div id="bloomfoldNextReward" class="next-reward" aria-label="Bloomfold next rewards">
+            <span><small>NEXT GROWTH</small><strong id="bloomfoldNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="bloomfoldNextSkill">CALCULATING</strong></span>
+          </div>
+          <button class="enter-button" type="button" data-play="bloomfold"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
+          <small>TYPICAL RUN: 90 SECONDS · POINT TO ORBIT</small>
+        </article>
+
+        <article id="ripplewakeCard" class="game-card ripplewake-card glass" data-game="ripplewake">
+          <div class="card-number">TREE 03</div>
+          <div class="game-emblem ripplewake-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><span>≋</span>
+          </div>
+          <span id="ripplewakeVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE ECHO ALDER</span>
+          <h2>RIPPLEWAKE</h2>
+          <p>Skip moonstones across a living lake and bloom the water with every perfect touch.</p>
+          <div class="mastery-line">
+            <div><span>GROWTH</span><strong id="ripplewakeMastery">SEED</strong></div>
+            <div><span>TOTAL SCORE</span><strong id="ripplewakeTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="ripplewakeBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Ripplewake tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="ripplewakeProgress"></i></div>
+          <div id="ripplewakeNextReward" class="next-reward" aria-label="Ripplewake next rewards">
+            <span><small>NEXT GROWTH</small><strong id="ripplewakeNextGrowth">CALCULATING</strong></span>
+            <span><small>SKILL KEY</small><strong id="ripplewakeNextSkill">CALCULATING</strong></span>
+          </div>
+          <button class="enter-button" type="button" data-play="ripplewake"><span>ENTER THIS TREE</span><i aria-hidden="true">→</i></button>
+          <small>TYPICAL RUN: 70–75 SECONDS · AIM &amp; TIME</small>
+        </article>
+
+        <article id="prismbindCard" class="game-card prismbind-card guardian-card glass is-locked" data-game="prismbind" aria-labelledby="prismbindTitle" aria-describedby="prismbindRequirement">
+          <div class="card-number">TREE 04 · GUARDIAN</div>
+          <div class="game-emblem prismbind-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><span>◆</span>
+          </div>
+          <span id="prismbindVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE CONCORD BANYAN</span>
+          <h2 id="prismbindTitle">PRISMBIND</h2>
+          <p>Prove all three foundational disciplines, then awaken the living Crownheart.</p>
+          <div class="seed-gate" role="group" aria-label="Mastery Seeds required to awaken Prismbind">
+            <div id="lumenloomSeed" class="seed-socket" data-seed="lumenloom"><span aria-hidden="true">✦</span><small>LUMENLOOM</small></div>
+            <div id="bloomfoldSeed" class="seed-socket" data-seed="bloomfold"><span aria-hidden="true">◇</span><small>BLOOMFOLD</small></div>
+            <div id="ripplewakeSeed" class="seed-socket" data-seed="ripplewake"><span aria-hidden="true">≋</span><small>RIPPLEWAKE</small></div>
+          </div>
+          <div class="mastery-line guardian-mastery">
+            <div><span>GROWTH</span><strong id="prismbindMastery">SLEEPING</strong></div>
+            <div><span>TREE TOTAL</span><strong id="prismbindTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="prismbindBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Prismbind tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prismbindProgress"></i></div>
+          <div id="prismbindNextReward" class="next-reward" aria-label="Prismbind next rewards">
+            <span><small>NEXT GROWTH</small><strong id="prismbindNextGrowth">CALCULATING</strong></span>
+            <span><small>GUARDIAN PATH</small><strong id="prismbindNextSkill">CALCULATING</strong></span>
+          </div>
+          <button id="prismbindButton" class="enter-button" type="button" data-play="prismbind" disabled><span id="prismbindButtonLabel">EARN 3 MASTERY SEEDS</span><i aria-hidden="true">◆</i></button>
+          <small id="prismbindRequirement">0 / 3 SEEDS · PEAK SKILL, NOT TREE TOTAL</small>
+        </article>
+
+        <article id="mothchorusCard" class="game-card mothchorus-card glass is-locked" data-game="mothchorus" aria-labelledby="mothchorusTitle" aria-describedby="mothchorusRequirement">
+          <div class="card-number">TREE 05 · SECOND GROVE</div>
+          <div class="game-emblem mothchorus-emblem" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><span>♡</span>
+          </div>
+          <span id="mothchorusVisitMark" class="visit-mark" aria-hidden="true">AWAKE THIS VISIT</span>
+          <span class="eyebrow">THE CHOIR LINDEN</span>
+          <h2 id="mothchorusTitle">MOTHCHORUS</h2>
+          <p>Pulse from opposite sides, guide a luminous flock, and bring its many voices home as one song.</p>
+          <div id="mothchorusGate" class="choir-gate" role="status" aria-live="polite">
+            <span aria-hidden="true">◆</span>
+            <div><small>CROWNHEART GATE</small><strong id="mothchorusGateCopy">DEFEAT PRISMBIND TO AWAKEN</strong></div>
+          </div>
+          <div class="mastery-line">
+            <div><span>GROWTH</span><strong id="mothchorusMastery">SLEEPING</strong></div>
+            <div><span>TREE TOTAL</span><strong id="mothchorusTotal">0</strong></div>
+            <div><span>BEST RUN</span><strong id="mothchorusBest">0</strong></div>
+          </div>
+          <div class="rank-track" role="progressbar" aria-label="Mothchorus tree growth progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="mothchorusProgress"></i></div>
+          <div id="mothchorusNextReward" class="next-reward" aria-label="Mothchorus next rewards">
+            <span><small>NEXT GROWTH</small><strong id="mothchorusNextGrowth">CROWNHEART GATE</strong></span>
+            <span><small>CHOIR SEED</small><strong id="mothchorusNextSkill">6,500 SCORE + 18 / 24 VOICES</strong></span>
+          </div>
+          <div id="mothchorusSeedStatus" class="choir-seed-status" role="status" aria-live="polite">
+            <span aria-hidden="true">✦</span>
+            <div><small>ADVANCED MASTERY SEED</small><strong id="mothchorusSeedState">LISTENING FOR 6,500 + 18 VOICES</strong></div>
+          </div>
+          <button id="mothchorusButton" class="enter-button" type="button" data-play="mothchorus" disabled><span id="mothchorusButtonLabel">DEFEAT PRISMBIND</span><i aria-hidden="true">→</i></button>
+          <small id="mothchorusRequirement">CHOIR SEED: 6,500 SCORE · 18 / 24 VOICES HOME · SOLO OR TOGETHER</small>
+        </article>
+      </section>
+
+      <section class="sleeping-grove" aria-labelledby="sleepingTitle">
+        <div class="sleeping-copy">
+          <span class="eyebrow">BEYOND THE CLEARING</span>
+          <h2 id="sleepingTitle"><span id="sleepingCount">Five</span> saplings are still dreaming.</h2>
+        </div>
+        <div id="saplingRow" class="sapling-row"></div>
+        <div id="regionStatus" class="region-status glass" aria-live="polite">
+          <span class="eyebrow">THE NEXT CLEARING</span>
+          <strong id="regionStatusTitle">SLEEPING BEYOND THE CROWNHEART</strong>
+          <small id="regionStatusCopy">Defeat Prismbind to awaken Tree 05 and reveal the next clearing.</small>
+        </div>
+      </section>
+
+      <footer class="grove-footer">
+        <span>EVERY FINISHED RUN FEEDS ITS OWN TREE · PERSONAL BESTS STAY VISIBLE</span>
+        <span id="profileStatus">LOCAL KEEPER PROFILE · READY</span>
+      </footer>
+    </section>
+
+    <section id="saveRecoveryOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pendingSaveTitle" aria-describedby="pendingSaveCopy" aria-hidden="true" inert>
+      <div class="settings-panel ornate-panel compact-panel">
+        <span class="eyebrow">SAVE PAUSED</span>
+        <h2 id="pendingSaveTitle">Your progress is waiting safely.</h2>
+        <p id="pendingSaveCopy">The Grove kept this exact change in memory and did not show it as saved.</p>
+        <p class="save-recovery-note">Retry uses the same result and timestamp. Your previously saved Grove remains untouched.</p>
+        <div class="save-recovery-actions">
+          <button id="pendingRetryButton" class="primary-button" type="button"><span>RETRY SAVE</span><i aria-hidden="true">→</i></button>
+          <button id="pendingSessionButton" class="save-session-button" type="button" hidden>
+            <span>PLAY THIS VISIT · NOT SAVED</span><i aria-hidden="true">→</i>
+          </button>
+          <button id="pendingReturnButton" class="save-session-button save-return-button" type="button" hidden>
+            <span>RETURN WITHOUT SAVING</span><i aria-hidden="true">←</i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="firstBloomOverlay" class="first-bloom-overlay phase-await-movement" role="dialog" aria-modal="true" aria-labelledby="firstBloomTitle" aria-describedby="firstBloomHint" aria-hidden="true" inert>
+      <div class="first-bloom-shell">
+        <header class="first-bloom-header">
+          <div class="first-bloom-title">
+            <span class="eyebrow">FIRST BLOOM</span>
+            <h2 id="firstBloomTitle">Wake the clearing.</h2>
+          </div>
+          <button id="firstBloomSkipButton" class="first-bloom-skip" type="button">SKIP <span aria-hidden="true">→</span></button>
+        </header>
+
+        <div id="firstBloomStage" class="first-bloom-stage" tabindex="0" role="group" aria-label="Moonlit clearing. Move the loomwing, touch each flower, then close the shape.">
+          <div class="first-bloom-moon" aria-hidden="true"></div>
+          <div class="first-bloom-horizon" aria-hidden="true"></div>
+
+          <div id="firstBloomTreeReveal" class="first-bloom-tree-reveal" aria-hidden="true">
+            <svg viewBox="0 0 400 430" focusable="false">
+              <defs>
+                <radialGradient id="firstBloomCrownGlow" cx="50%" cy="42%" r="58%">
+                  <stop offset="0%" stop-color="#fff7b0" stop-opacity=".9"/>
+                  <stop offset="35%" stop-color="#81fff4" stop-opacity=".72"/>
+                  <stop offset="72%" stop-color="#b57cff" stop-opacity=".38"/>
+                  <stop offset="100%" stop-color="#7a4dff" stop-opacity="0"/>
+                </radialGradient>
+                <linearGradient id="firstBloomTrunkGlow" x1="0%" y1="100%" x2="70%" y2="0%">
+                  <stop offset="0%" stop-color="#8a5a64"/>
+                  <stop offset="45%" stop-color="#ffd47d"/>
+                  <stop offset="100%" stop-color="#d2fff6"/>
+                </linearGradient>
+              </defs>
+              <ellipse class="first-bloom-tree-halo" cx="200" cy="185" rx="174" ry="166" fill="url(#firstBloomCrownGlow)"/>
+              <path class="first-bloom-tree-trunk" d="M181 408 C187 340 174 297 199 240 C218 199 220 151 215 93 C241 149 242 204 224 247 C209 284 220 340 239 408 Z" fill="url(#firstBloomTrunkGlow)"/>
+              <g class="first-bloom-tree-branches" fill="none" stroke-linecap="round">
+                <path d="M204 264 C160 233 131 198 106 146"/>
+                <path d="M213 236 C259 209 287 173 302 125"/>
+                <path d="M209 201 C170 167 160 126 153 82"/>
+                <path d="M220 187 C246 156 253 111 253 69"/>
+              </g>
+              <g class="first-bloom-tree-crown">
+                <circle cx="109" cy="139" r="58"/>
+                <circle cx="157" cy="91" r="70"/>
+                <circle cx="226" cy="82" r="76"/>
+                <circle cx="292" cy="129" r="62"/>
+                <circle cx="257" cy="185" r="72"/>
+                <circle cx="164" cy="182" r="76"/>
+              </g>
+              <g class="first-bloom-tree-fruit">
+                <circle cx="136" cy="122" r="5"/>
+                <circle cx="208" cy="67" r="6"/>
+                <circle cx="274" cy="142" r="5"/>
+                <circle cx="187" cy="175" r="4"/>
+                <circle cx="245" cy="199" r="4"/>
+              </g>
+            </svg>
+          </div>
+
+          <svg id="firstBloomThreadSvg" class="first-bloom-thread-svg" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path id="firstBloomCuePath" class="first-bloom-cue-path" d=""/>
+            <path id="firstBloomThreadPath" class="first-bloom-thread-path" d=""/>
+          </svg>
+
+          <button id="firstBloomFlower1" class="first-bloom-flower" type="button" data-first-bloom-flower="flower-1" aria-label="Moonflower one">
+            <span class="first-bloom-petals" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b></b></span>
+          </button>
+          <button id="firstBloomFlower2" class="first-bloom-flower" type="button" data-first-bloom-flower="flower-2" aria-label="Moonflower two">
+            <span class="first-bloom-petals" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b></b></span>
+          </button>
+          <button id="firstBloomFlower3" class="first-bloom-flower" type="button" data-first-bloom-flower="flower-3" aria-label="Moonflower three">
+            <span class="first-bloom-petals" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b></b></span>
+          </button>
+
+          <div id="firstBloomLoomwing" class="first-bloom-loomwing" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><b></b>
+          </div>
+          <div id="firstBloomCue" class="first-bloom-cue" aria-hidden="true"><i></i></div>
+        </div>
+
+        <div class="first-bloom-controls" aria-label="Move the loomwing">
+          <button id="firstBloomMoveUp" type="button" data-dx="0" data-dy="-0.08" aria-label="Move up">&uarr;</button>
+          <button id="firstBloomMoveLeft" type="button" data-dx="-0.08" data-dy="0" aria-label="Move left">&larr;</button>
+          <button id="firstBloomMoveRight" type="button" data-dx="0.08" data-dy="0" aria-label="Move right">&rarr;</button>
+          <button id="firstBloomMoveDown" type="button" data-dx="0" data-dy="0.08" aria-label="Move down">&darr;</button>
+        </div>
+
+        <footer class="first-bloom-footer">
+          <p id="firstBloomHint">Move the loomwing.</p>
+          <span id="firstBloomSaveStatus" class="first-bloom-save-status">LOCAL BEGINNING · READY</span>
+        </footer>
+        <div id="firstBloomLive" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+      </div>
+    </section>
+
+    <section id="helpOverlay" class="overlay utility-overlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-describedby="helpSummary" aria-hidden="true" inert>
+      <div class="utility-panel ornate-panel">
+        <span class="eyebrow">PLAY HELP</span>
+        <h2 id="helpTitle" tabindex="-1">Controls at a glance</h2>
+        <p id="helpSummary">The controls you need remain visible while you play. This guide can replay the opening cue without changing progress.</p>
+
+        <div class="utility-guide-grid">
+          <section class="utility-guide-card" aria-labelledby="groveHelpTitle">
+            <h3 id="groveHelpTitle">IN THE GROVE</h3>
+            <ul class="utility-control-list">
+              <li><span class="utility-key-pair" aria-hidden="true"><kbd>&larr;</kbd><kbd>&rarr;</kbd></span><span>Choose a tree. On touch, swipe the tree or rail.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">PLAY</span><span>Choose a Lumenloom bloom, then Play.</span></li>
+            </ul>
+          </section>
+
+          <section class="utility-guide-card" aria-labelledby="lumenloomHelpTitle">
+            <h3 id="lumenloomHelpTitle">IN LUMENLOOM</h3>
+            <ul class="utility-control-list">
+              <li><span class="utility-key-word" aria-hidden="true">MOVE</span><span>Use WASD or arrows. On touch, guide with your thumb.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">WEAVE</span><span>Press Space, click, or use the Weave button near a flower.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">CLOSE</span><span>Pin at least three flowers, then return to the golden first flower.</span></li>
+            </ul>
+          </section>
+        </div>
+
+        <section class="utility-context" aria-labelledby="helpContextTitle">
+          <span class="eyebrow">SELECTED BLOOM</span>
+          <h3 id="helpContextTitle">PETAL RUSH</h3>
+          <p id="helpContextCopy">Seal loops for 90 seconds. Keep at least one petal.</p>
+        </section>
+
+        <div class="utility-actions">
+          <button id="replayFirstBloomButton" class="text-button utility-replay-button" type="button">REPLAY FIRST BLOOM</button>
+          <button id="closeHelpButton" class="primary-button" type="button"><span>RETURN</span><i aria-hidden="true">&rarr;</i></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="journalOverlay" class="overlay utility-overlay" role="dialog" aria-modal="true" aria-labelledby="journalTitle" aria-describedby="journalSummary" aria-hidden="true" inert>
+      <div class="utility-panel journal-panel ornate-panel">
+        <span class="eyebrow">TREE JOURNAL &middot; 01</span>
+        <h2 id="journalTitle" tabindex="-1">The Lantern Willow</h2>
+        <p id="journalSummary">Stitch flowers into luminous shapes and wake a garden from shadow.</p>
+
+        <div class="journal-grid">
+          <section class="journal-card journal-lore" aria-labelledby="journalLoreTitle">
+            <h3 id="journalLoreTitle">THE LOOMWING</h3>
+            <p>The Hollow has swallowed every color before dawn. You are the last little loomwing&mdash;and light becomes real wherever your thread closes.</p>
+          </section>
+
+          <section class="journal-card" aria-labelledby="journalGrowthTitle">
+            <h3 id="journalGrowthTitle">HOW THE TREE GROWS</h3>
+            <p>Every finished run feeds its own tree. Tree Total sets growth; each mode keeps its own Best. Standard Night Garden alone can prove the Lantern Willow Mastery Seed.</p>
+          </section>
+
+          <section class="journal-card" aria-labelledby="journalControlsTitle">
+            <h3 id="journalControlsTitle">THE WEAVE</h3>
+            <ol>
+              <li>Glide close to a flower and begin weaving.</li>
+              <li>Touch at least two other flowers to pin the glowing thread.</li>
+              <li>Return to the first golden flower to seal the loop.</li>
+            </ol>
+          </section>
+
+          <section class="journal-card journal-modes" aria-labelledby="journalModesTitle">
+            <h3 id="journalModesTitle">FOUR BLOOMS</h3>
+            <dl>
+              <div><dt>NIGHT GARDEN</dt><dd>First Stitch, three escalating nights, blessing choices, the Hollow, and dawn.</dd></div>
+              <div><dt>PETAL RUSH</dt><dd>A 90-second score attack with 11 replenishing flowers and three petals.</dd></div>
+              <div><dt>SHIFTING CONSTELLATION</dt><dd>At Silver, match clean three-, four-, and five-flower targets before they shift. Valid off-target loops still score.</dd></div>
+              <div><dt>HOLLOW RUSH</dt><dd>At Gold, enter the Guardian arena and close three valid seals before time or petals expire.</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <button id="closeJournalButton" class="primary-button utility-close-button" type="button"><span>RETURN</span><i aria-hidden="true">&rarr;</i></button>
+      </div>
+    </section>
+
+    <section id="growthOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="growthTitle" aria-describedby="growthCopy" aria-hidden="true" inert>
+      <div id="growthPanel" class="growth-panel ornate-panel">
+        <span id="growthSymbol" class="growth-symbol" aria-hidden="true">✦</span>
+        <span id="ceremonyKicker" class="eyebrow">THE GROVE REMEMBERS</span>
+        <h2 id="growthTitle">A branch has awakened.</h2>
+        <p id="growthCopy">This run’s score became part of its tree.</p>
+        <div id="growthOutcome" class="growth-outcome is-hidden">POINTS TOOK ROOT</div>
+        <div class="growth-stats">
+          <div><span id="growthRunLabel">RUN SCORE</span><strong id="growthRunScore">0</strong></div>
+          <div><span id="growthScoreLabel">TREE TOTAL</span><strong id="growthScore">0</strong></div>
+          <div><span id="growthMasteryLabel">GROWTH</span><strong id="growthMastery">BUD</strong></div>
+        </div>
+        <div id="ceremonyNextReward" class="ceremony-next-reward">
+          <span>NEXT REWARD</span><strong id="growthNextReward">KEEP GROWING</strong>
+        </div>
+        <button id="growthContinueButton" class="primary-button" type="button"><span>SEE THE GROVE</span><i aria-hidden="true">→</i></button>
+      </div>
+    </section>
+
+    <section id="trialResultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="trialResultTitle" aria-hidden="true" inert>
+      <div class="growth-panel ornate-panel">
+        <span class="growth-symbol threefold" aria-hidden="true">✤</span>
+        <span class="eyebrow">THREEFOLD BLOOM PRESERVED</span>
+        <h2 id="trialResultTitle">The grove has measured three forms of balance.</h2>
+        <p id="trialResultCopy">Three different forms of mastery, held by one root.</p>
+        <div class="trial-scores">
+          <article><span>LUMENLOOM</span><strong id="trialLumenScore">0</strong></article>
+          <article><span>BLOOMFOLD</span><strong id="trialBloomScore">0</strong></article>
+          <article><span>RIPPLEWAKE</span><strong id="trialRippleScore">0</strong></article>
+          <article><span>TRIAL</span><strong id="trialCombinedScore">0</strong></article>
+        </div>
+        <button id="trialDoneButton" class="primary-button" type="button"><span>RETURN TO THE FIRST TREE</span><i aria-hidden="true">→</i></button>
+      </div>
+    </section>
+
+    <section id="settingsOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true" inert>
+      <div class="settings-panel ornate-panel">
+        <span class="eyebrow">KEEPER OPTIONS</span>
+        <h2 id="settingsTitle">Grove settings</h2>
+        <p>Progress is stored only in this browser profile. Export a backup before changing browsers or clearing site data.</p>
+        <div class="sound-setting">
+          <div>
+            <strong>TREE VOICES</strong>
+            <small>Brief synthesized notes answer selection and growth. No ambient loop.</small>
+          </div>
+          <button id="groveSoundButton" class="sound-toggle" type="button" aria-pressed="true">SOUND ON</button>
+        </div>
+        <div class="data-actions" aria-label="Local profile data controls">
+          <button id="exportProgressButton" class="text-button" type="button">Export progress backup</button>
+          <button id="importProgressButton" class="text-button" type="button">Import progress backup</button>
+          <input id="importProgressInput" class="visually-hidden" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true">
+        </div>
+        <p id="dataManagementStatus" class="data-status" role="status" aria-live="polite">No data action is pending.</p>
+        <button id="releaseInfoButton" class="release-info-button" type="button">Release information &amp; support</button>
+        <button id="closeSettingsButton" class="primary-button" type="button"><span>RETURN</span><i aria-hidden="true">→</i></button>
+        <button id="resetProgressButton" class="text-button danger-button" type="button">Reset all local progress</button>
+      </div>
+    </section>
+
+    <section id="releaseInfoOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="releaseInfoTitle" aria-describedby="releaseInfoSummary" aria-hidden="true" inert>
+      <div class="release-info-panel ornate-panel">
+        <span class="eyebrow">RELEASE INFORMATION &amp; SUPPORT</span>
+        <h2 id="releaseInfoTitle" tabindex="-1">A clear window into the Grove.</h2>
+        <p id="releaseInfoSummary">Build details, privacy facts, review status, and a safe way to share technical context.</p>
+
+        <div class="release-info-grid">
+          <section class="release-info-card release-build-card" aria-labelledby="releaseBuildHeading">
+            <span id="releaseBuildHeading" class="release-info-label">CURRENT BUILD</span>
+            <strong id="releaseBuildIdentity">0.5.0-alpha.2</strong>
+            <small>Release candidate · web build</small>
+          </section>
+
+          <section class="release-info-card release-privacy-card" aria-labelledby="releasePrivacyHeading">
+            <span id="releasePrivacyHeading" class="release-info-label">LOCAL-ONLY PLAY</span>
+            <p>First Bloom has no accounts, ads, analytics, or trackers. Scores and preferences stay in this browser; the game makes no automatic transmission of them.</p>
+          </section>
+
+          <section class="release-info-card release-review-card" aria-labelledby="releaseReviewHeading">
+            <div class="release-card-heading">
+              <span id="releaseReviewHeading" class="release-info-label">CREDITS &amp; LEGAL</span>
+              <strong class="review-pending">OWNER REVIEW PENDING</strong>
+            </div>
+            <p>The privacy and credits drafts are available for review. Ownership, rights, and legal wording still require owner approval before final release.</p>
+            <div class="release-link-row">
+              <a href="../PRIVACY.md" target="_blank" rel="noopener">Read privacy draft</a>
+              <a href="../CREDITS.md" target="_blank" rel="noopener">Read credits draft</a>
+            </div>
+          </section>
+
+          <section class="release-info-card release-support-card" aria-labelledby="releaseSupportHeading">
+            <span id="releaseSupportHeading" class="release-info-label">FEEDBACK &amp; DIAGNOSTICS</span>
+            <p>If something feels wrong, copy the non-sensitive device details below and include them with a GitHub issue. Diagnostics never include scores, saves, or stored profile contents.</p>
+            <div class="release-support-actions">
+              <button id="copyDiagnosticsButton" class="release-action-button" type="button">Copy diagnostics</button>
+              <a class="release-action-link" href="https://github.com/FirstBloomGames/Mastery-Grove/issues/new/choose" target="_blank" rel="noopener noreferrer">Open feedback form</a>
+            </div>
+            <p id="diagnosticsStatus" class="diagnostics-status" role="status" aria-live="polite">Diagnostics are created only when you choose Copy diagnostics.</p>
+            <label id="diagnosticsOutputLabel" class="visually-hidden" for="diagnosticsOutput">Selectable Grove diagnostics</label>
+            <textarea id="diagnosticsOutput" class="diagnostics-output is-hidden" rows="8" readonly spellcheck="false" tabindex="0" aria-labelledby="diagnosticsOutputLabel"></textarea>
+          </section>
+        </div>
+
+        <button id="closeReleaseInfoButton" class="primary-button release-close-button" type="button"><span>CLOSE RELEASE INFORMATION</span><i aria-hidden="true">→</i></button>
+      </div>
+    </section>
+
+    <section id="returnConfirmOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="returnConfirmTitle" aria-describedby="returnConfirmCopy" aria-hidden="true" inert>
+      <div class="settings-panel ornate-panel compact-panel">
+        <span class="eyebrow">UNFINISHED RUN</span>
+        <h2 id="returnConfirmTitle">Leave this tree?</h2>
+        <p id="returnConfirmCopy">This unfinished run will not be recorded. Progress from earlier completed runs is already safe.</p>
+        <div class="confirm-actions">
+          <button id="stayInGameButton" class="primary-button" type="button"><span>KEEP PLAYING</span><i aria-hidden="true">→</i></button>
+          <button id="confirmReturnButton" class="text-button danger-button" type="button">Abandon run and return</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="gameShell" class="game-shell is-hidden" aria-label="Arcade game">
+      <header class="game-bar">
+        <button id="returnButton" class="return-button" type="button"><span aria-hidden="true">←</span> RETURN TO GROVE</button>
+        <div class="game-bar-title">
+          <span id="activeTreeLabel" class="eyebrow">TREE 01</span>
+          <strong id="activeGameTitle">LUMENLOOM</strong>
+        </div>
+        <div id="trialProgress" class="trial-progress is-hidden">GROVE TRIAL · 1 / 3</div>
+        <button id="nextGameButton" class="next-game-button is-hidden" type="button">CONTINUE TRIAL <span aria-hidden="true">→</span></button>
+      </header>
+      <div class="frame-wrap">
+        <div id="frameLoading" class="frame-loading" role="status" aria-live="polite">
+          <span aria-hidden="true">✦</span>
+          <strong id="frameLoadingTitle">ENTERING THE TREE</strong>
+          <small id="frameLoadingCopy">Waiting for the game to answer…</small>
+          <div id="frameLoadingActions" class="frame-loading-actions is-hidden">
+            <button id="retryGameButton" class="return-button" type="button">RETRY</button>
+            <button id="loadingReturnButton" class="return-button" type="button">RETURN TO GROVE</button>
+          </div>
+        </div>
+        <iframe id="gameFrame" title="First Bloom arcade game" tabindex="0" allow="autoplay" referrerpolicy="no-referrer"></iframe>
+      </div>
+    </section>
+
+    <div id="groveToast" class="grove-toast" role="status" aria-live="polite"></div>
+    <div id="groveLive" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  </main>
+
+  <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
+
+  <script src="../Lumenloom/modes.js?v=0.5.0-alpha.2"></script>
+  <script src="protocol-v2.js?v=0.5.0-alpha.2"></script>
+  <script src="progression.js?v=0.5.0-alpha.2"></script>
+  <script src="growth-visuals.js?v=0.5.0-alpha.2"></script>
+  <script src="lumenloom-session.js?v=0.5.0-alpha.2"></script>
+  <script src="profile-storage.js?v=0.5.0-alpha.2"></script>
+  <script src="first-bloom.js?v=0.5.0-alpha.2"></script>
+  <script src="carousel.js?v=0.5.0-alpha.2"></script>
+  <script src="grove.js?v=0.5.0-alpha.2"></script>
+</body>
+</html>

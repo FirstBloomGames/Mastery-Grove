@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070817">
+  <meta name="description" content="Bloomfold — a one-thumb dive through a living fractal.">
+  <title>Bloomfold — A First Bloom Games Original</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+  <meta name="first-bloom-release" content="0.5.0-alpha.2">
+</head>
+<body>
+  <main id="app" aria-label="Bloomfold game">
+    <canvas id="fractalCanvas" aria-hidden="true"></canvas>
+    <canvas id="gameCanvas" tabindex="0" aria-label="Bloomfold playfield. Move the mouse or touch around the heart, or use A and D, to orbit through glowing openings." aria-hidden="true" inert></canvas>
+    <div class="veil" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <section id="hud" class="hud is-hidden" aria-label="Game status" aria-hidden="true" inert>
+      <div class="hud-top">
+        <div class="phase-card glass">
+          <span class="eyebrow">CURRENT FOLD</span>
+          <strong id="phaseName">FIRST FOLD</strong>
+          <small id="timeValue">01:30</small>
+        </div>
+
+        <div class="score-card">
+          <span class="eyebrow">RESONANCE</span>
+          <strong id="scoreValue">0</strong>
+          <small id="bestValue">BEST 0</small>
+        </div>
+
+        <div class="hud-actions glass">
+          <button id="soundButton" class="icon-button" type="button" aria-label="Mute sound" title="Mute sound (M)">
+            <span id="soundIcon" aria-hidden="true">♪</span>
+          </button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
+            <span aria-hidden="true">⛶</span>
+          </button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" title="Pause (P)">
+            <span aria-hidden="true">Ⅱ</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="guideCard" class="guide-card glass">
+        <span class="guide-pip" aria-hidden="true"></span>
+        <div>
+          <span class="eyebrow">THE FIRST OPENING</span>
+          <strong id="guideText">POINT AT THE CYAN OPENING</strong>
+        </div>
+      </div>
+
+      <div class="vitals glass">
+        <div class="vital-row">
+          <span class="eyebrow">PETALS</span>
+          <div id="petalDisplay" class="petals" aria-label="3 petals remaining">
+            <span>◆</span><span>◆</span><span>◆</span>
+          </div>
+          <span id="shellIndicator" class="shell-indicator">SHELL</span>
+        </div>
+        <div class="vital-row resonance-row">
+          <span class="eyebrow">BLOOM</span>
+          <div class="resonance-track"><i id="resonanceFill"></i></div>
+          <span id="resonanceValue">0%</span>
+        </div>
+      </div>
+
+      <div id="mutationStrip" class="mutation-strip" aria-label="Chosen mutations"></div>
+
+      <div id="comboBadge" class="combo-badge is-hidden" aria-live="polite">
+        <strong id="comboValue">×1.0</strong>
+        <small>UNBROKEN</small>
+      </div>
+
+      <div class="control-hint glass">
+        <span><kbd>MOVE</kbd> point to orbit</span>
+        <span><kbd>A</kbd><kbd>D</kbd> or arrows</span>
+        <span><kbd>P</kbd> pause</span>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="screenFlash" class="screen-flash" aria-hidden="true"></div>
+
+    <section id="startOverlay" class="overlay is-visible" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+      <div class="start-panel ornate-panel">
+        <div class="studio-mark"><span aria-hidden="true">✦</span> FIRST BLOOM GAMES ORIGINAL</div>
+        <h1 id="startTitle">BLOOM<span>FOLD</span></h1>
+        <p class="tagline">Dive inward. Grow outward.</p>
+        <p class="premise">You are a seed falling through an infinite living pattern. Follow its openings, choose how it mutates, and leave behind a bloom that has never existed before.</p>
+
+        <div class="how-to">
+          <article>
+            <span class="step-number">01</span>
+            <div><strong>ORBIT</strong><small>Move the mouse or touch where the seed should go.</small></div>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <div><strong>ALIGN</strong><small>Enter cyan openings. Brave gold ones for triple resonance.</small></div>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <div><strong>BECOME</strong><small>Choose mutations that reshape both the bloom and the run.</small></div>
+          </article>
+        </div>
+
+        <button id="playButton" class="primary-button" type="button">
+          <span>BEGIN THE DESCENT</span><i aria-hidden="true">→</i>
+        </button>
+        <div class="start-footer">
+          <span id="startBest">PERSONAL BEST · 0</span>
+          <span>TYPICAL RUN: 90 SECONDS · HEADPHONES LOVELY</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="mutationOverlay" class="overlay mutation-overlay" role="dialog" aria-modal="true" aria-labelledby="mutationTitle" aria-hidden="true" inert>
+      <div class="choice-panel ornate-panel">
+        <span class="choice-symbol" aria-hidden="true">⌁</span>
+        <span class="eyebrow">THE FRACTAL REMEMBERS</span>
+        <h2 id="mutationTitle">Choose how you change.</h2>
+        <p>Your choice alters the rules, the music, and the living geometry. The fold also restores one petal.</p>
+        <div id="mutationChoices" class="mutation-choices"></div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" aria-hidden="true" inert>
+      <div class="pause-panel ornate-panel">
+        <span class="choice-symbol" aria-hidden="true">◇</span>
+        <span class="eyebrow">BETWEEN HEARTBEATS</span>
+        <h2 id="pauseTitle">The fold is resting.</h2>
+        <p>Your bloom will wait exactly where you left it.</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>RETURN TO THE FOLD</span><i aria-hidden="true">→</i></button>
+        <button id="quitButton" class="text-button" type="button">End this bloom</button>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay result-overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-hidden="true" inert>
+      <div class="result-panel ornate-panel">
+        <span class="result-symbol" aria-hidden="true">✦</span>
+        <span class="eyebrow">SPECIMEN PRESERVED</span>
+        <h2 id="resultTitle">The bloom remembers you.</h2>
+        <p id="bloomName" class="bloom-name">THE QUIET SPIRAL</p>
+        <p id="resultCopy" class="result-copy">A living pattern shaped by every opening you chose.</p>
+        <div id="lineage" class="lineage"></div>
+        <div class="result-stats">
+          <article><span>SCORE</span><strong id="resultScore">0</strong></article>
+          <article><span>RANK</span><strong id="resultRank">SEEDLING</strong></article>
+          <article><span>GATES</span><strong id="resultGates">0</strong></article>
+          <article><span>PERFECT</span><strong id="resultPerfects">0</strong></article>
+        </div>
+        <span id="specimenCode" class="specimen-code">SPECIMEN BF-000000</span>
+        <button id="replayButton" class="primary-button" type="button"><span>DIVE AGAIN</span><i aria-hidden="true">↻</i></button>
+        <button id="homeButton" class="text-button" type="button">Return to title</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>

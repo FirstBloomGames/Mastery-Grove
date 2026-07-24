@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "product": "First Bloom: The Mastery Grove",
+  "version": "0.5.0-alpha.2",
+  "channel": "release-candidate",
+  "entrypoint": "index.html",
+  "canonicalEntry": "MasteryGrove/index.html",
+  "games": [
+    "Lumenloom",
+    "Bloomfold",
+    "Ripplewake",
+    "Prismbind",
+    "Mothchorus"
+  ],
+  "reviewGates": [
+    "privacy-owner-and-legal-review",
+    "credits-and-rights-owner-review",
+    "target-platform-technical-review",
+    "physical-phone-and-shared-ipad-validation",
+    "ten-unfamiliar-player-living-arcade-pilot"
+  ],
+  "builtAt": "2026-07-24T01:51:08.487Z",
+  "fileCount": 45,
+  "hashedPayloadFileCount": 44,
+  "files": [
+    {
+      "path": "Bloomfold/game.js",
+      "bytes": 67157,
+      "sha256": "1847262a197789c6c0e8b54c9666e68df72909942e3c44deb8ccca2062bd262f"
+    },
+    {
+      "path": "Bloomfold/index.html",
+      "bytes": 8007,
+      "sha256": "8849a3c4a555e8f2a00fc309bdb3d05f92a63803623373b73a61ad78e2ce4bb8"
+    },
+    {
+      "path": "Bloomfold/styles.css",
+      "bytes": 27703,
+      "sha256": "ed2fe8eec26c70d4fdf27cc291599116d9b4df4040ad26e166cbb363ecfd2b4f"
+    },
+    {
+      "path": "CREDITS.md",
+      "bytes": 1672,
+      "sha256": "537766e08672c63914701a0bd3e2d4d5121d6c71e1be661e1177b06d12eef359"
+    },
+    {
+      "path": "index.html",
+      "bytes": 897,
+      "sha256": "059a6bf5a3f6639b282d9e9979a30487fcd8592b9475f4f359330ca886da0900"
+    },
+    {
+      "path": "Lumenloom/game.js",
+      "bytes": 181599,
+      "sha256": "f0052d7a635d2a881e821afed5885b9ac91199d63e3c0349db70a1691d084d49"
+    },
+    {
+      "path": "Lumenloom/grove-protocol-v2.js",
+      "bytes": 19709,
+      "sha256": "576466e8d881c8236019055758a930f3e376c8fd21876b0628e12ad2aab437ca"
+    },
+    {
+      "path": "Lumenloom/index.html",
+      "bytes": 10286,
+      "sha256": "2294a03257a40efb1519c45aaccd1b51aca1be1081c9eaa73c0b0693fd5e8775"
+    },
+    {
+      "path": "Lumenloom/modes.js",
+      "bytes": 9178,
+      "sha256": "a84e4afe9e729884242541608b93015cee2d6886ac2716cd6e36b3cb8df2fb12"
+    },
+    {
+      "path": "Lumenloom/styles.css",
+      "bytes": 58942,
+      "sha256": "9ffc69cfcba6365223330a1d73b75d4ec90d332297b3dea441c71ce7b0890750"
+    },
+    {
+      "path": "manifest.webmanifest",
+      "bytes": 526,
+      "sha256": "24d4478e182b3f3fb060dca0ee6094441a2e8f5071ab8ad6df88fd1c3b521c1a"
+    },
+    {
+      "path": "MasteryGrove/carousel.js",
+      "bytes": 16437,
+      "sha256": "7676ecaf7e462f3257a523c06e05de0c82ee928c2c6ffbc7594a06154161023a"
+    },
+    {
+      "path": "MasteryGrove/first-bloom.js",
+      "bytes": 17124,
+      "sha256": "b73d8f6eb487a3035c8fa581f9571127c9f3532f800306cff237292ba5e3c835"
+    },
+    {
+      "path": "MasteryGrove/grove.js",
+      "bytes": 194899,
+      "sha256": "140bbbddab3a2c719381d19479f0c35f4c0bca5d97c9a76c076b3deb5dcae2f4"
+    },
+    {
+      "path": "MasteryGrove/growth-visuals.js",
+      "bytes": 21772,
+      "sha256": "49ed15c621fb5835e433f0163665fd3557f5a914985dfe8c43b6edec52fa379e"
+    },
+    {
+      "path": "MasteryGrove/index.html",
+      "bytes": 49374,
+      "sha256": "d567f2717826974804d8224ad1700bd32b6da6a81d20c91aadba37f8456182e6"
+    },
+    {
+      "path": "MasteryGrove/lumenloom-session.js",
+      "bytes": 17227,
+      "sha256": "2494cded7c7e189679a0ee67e1dde368ebda2b2f99f6d5de3fcfab2bf948d14e"
+    },
+    {
+      "path": "MasteryGrove/profile-storage.js",
+      "bytes": 31338,
+      "sha256": "d3f296e921754ad21589f6a37ab6b801e8bc9de596beb384835822ee451db703"
+    },
+    {
+      "path": "MasteryGrove/progression.js",
+      "bytes": 60160,
+      "sha256": "4ae6b140448690682a817588630031db30c71f6e44c1be80f5c8d03225cad935"
+    },
+    {
+      "path": "MasteryGrove/protocol-v2.js",
+      "bytes": 24151,
+      "sha256": "bc4d687872a1e9d2ce4b3347e24ff1377b4680363c80238c70c1d472894b109b"
+    },
+    {
+      "path": "MasteryGrove/styles.css",
+      "bytes": 110069,
+      "sha256": "1c387f5a285241e063210f789967db8505ef686d742a3cdae620b31d0dc913b0"
+    },
+    {
+      "path": "Mothchorus/audio.js",
+      "bytes": 12537,
+      "sha256": "ed4322e860c05cc73697475b52aa38ba10cc9c166921df6ddcd01c242721bd88"
+    },
+    {
+      "path": "Mothchorus/game.js",
+      "bytes": 55469,
+      "sha256": "65c2fc8f50162d10f581e1d1f5660c7bd81b041f2cc712568450409426a8fb13"
+    },
+    {
+      "path": "Mothchorus/index.html",
+      "bytes": 8727,
+      "sha256": "5c5d3d56fa96bd3bff8ebe71da24403ca3c37684bd014452785387c8badc30a2"
+    },
+    {
+      "path": "Mothchorus/input.js",
+      "bytes": 10479,
+      "sha256": "fef721532b8e0183e39be1aa2e2f8b58a536e1305f9e9834c3e17a2a7bb0f829"
+    },
+    {
+      "path": "Mothchorus/projection.js",
+      "bytes": 6374,
+      "sha256": "57cd5f3af8d939463bba6991066ebd0b060bdfaec0bd3f4fe1690feca99826d5"
+    },
+    {
+      "path": "Mothchorus/renderer.js",
+      "bytes": 32808,
+      "sha256": "7f029d50405d17dbfd173ad56b321e9649a470fadf213bfaf2b9e837bb1630db"
+    },
+    {
+      "path": "Mothchorus/rules.js",
+      "bytes": 19292,
+      "sha256": "61c9343101655fd0fc0073d3b53a48f8f034ebb73007b60bf0726cf46b125b64"
+    },
+    {
+      "path": "Mothchorus/simulation.js",
+      "bytes": 45136,
+      "sha256": "b20fad3037fea731a736d56fa5d5d8c2da9a385d7b997b53fc7a7136ee94f6da"
+    },
+    {
+      "path": "Mothchorus/styles.css",
+      "bytes": 23528,
+      "sha256": "1d3acc354b544efecade17244ac3cf62b25de9ec6a7e9bc7892726f4397b2b37"
+    },
+    {
+      "path": "Prismbind/game.js",
+      "bytes": 106036,
+      "sha256": "aaa7895f385b6a258b9f2bad09aa3e369a94498dae54d4607e0d541e288cd292"
+    },
+    {
+      "path": "Prismbind/geometry.js",
+      "bytes": 3138,
+      "sha256": "5df10639a37be91b7169df21dae360acbf0ab4d8ce51416f642f3e5b8ca7cff3"
+    },
+    {
+      "path": "Prismbind/index.html",
+      "bytes": 8797,
+      "sha256": "948ad9212de37aa08381f034abf32b37128fb963f0e8a98350c850dd957d6853"
+    },
+    {
+      "path": "Prismbind/rules.js",
+      "bytes": 3839,
+      "sha256": "8712328692c670d49b8a84c1d5b873a02b7065c7f3ae3aacf32cc6bc9b67c325"
+    },
+    {
+      "path": "Prismbind/spectacle.js",
+      "bytes": 8128,
+      "sha256": "c9ac1282da80ad9916a4531a9a307d27d76a30304263641f7ecbf7c1165b2c05"
+    },
+    {
+      "path": "Prismbind/styles.css",
+      "bytes": 28402,
+      "sha256": "ccb047109eb639476b74d0f013fb7d00793b4dc77b2b427c3e5b18e558796fa4"
+    },
+    {
+      "path": "PRIVACY.md",
+      "bytes": 2232,
+      "sha256": "eec98eee4d3d85ca5c99e96cb659123b200f2393dd99a21756326f7f4d424ade"
+    },
+    {
+      "path": "README.md",
+      "bytes": 8627,
+      "sha256": "3b862e7b56332eb4bd0dbd39f4cffc3341d8b60e586d61fa176f68c5dc192a36"
+    },
+    {
+      "path": "release-assets/favicon.svg",
+      "bytes": 1148,
+      "sha256": "2db8c294977b8ced5cb9074d361ae0632712a471908ca7a467525fb4fbdb52d6"
+    },
+    {
+      "path": "Ripplewake/game.js",
+      "bytes": 64267,
+      "sha256": "59a0ca1bf4940f5b1885b6ab3afc11591506b00e8b8ff84a09e1a0292bf86ee1"
+    },
+    {
+      "path": "Ripplewake/index.html",
+      "bytes": 7336,
+      "sha256": "e8cc786c626647987ae783daa5b5187cd6a7cbeb4ff1309a8907b5657e28e4f4"
+    },
+    {
+      "path": "Ripplewake/rules.js",
+      "bytes": 820,
+      "sha256": "3a2e60573ae801068d4e33eb86f354869b33205e5d00cbb5ed0eb9a8fbebfd82"
+    },
+    {
+      "path": "Ripplewake/styles.css",
+      "bytes": 19919,
+      "sha256": "3f5520578f3da08e9f774b5e556fa28acf1d72a8b96e0030867e87a776d83538"
+    },
+    {
+      "path": "version.json",
+      "bytes": 555,
+      "sha256": "6df710621f1bee1024ced64a7dc23887fb5af73d8b210bf572752b70eb59dbdd"
+    }
+  ]
+}

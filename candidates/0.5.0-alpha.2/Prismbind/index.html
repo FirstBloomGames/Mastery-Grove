@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071714">
+  <meta name="description" content="Prismbind — awaken the Concord Banyan by aligning arcs, catching pulses, and closing living seals of light.">
+  <title>Prismbind — A Mastery Grove Guardian</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="rules.js" defer></script>
+  <script src="geometry.js" defer></script>
+  <script src="spectacle.js" defer></script>
+  <script src="game.js" defer></script>
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
+  <meta name="first-bloom-release" content="0.5.0-alpha.2">
+</head>
+<body>
+  <main id="app" aria-label="Prismbind game">
+    <canvas id="gameCanvas" tabindex="0" aria-label="Prismbind playfield. Point toward an orbiting node, click or tap when its pulse arrives, then connect the anchors into a closed light seal. Keyboard players can aim with A and D or the arrow keys and bind with Space."></canvas>
+
+    <div class="canopy-veil" aria-hidden="true"></div>
+    <div class="prism-haze" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <section id="hud" class="hud is-hidden" aria-label="Prismbind status">
+      <div class="hud-top">
+        <div class="phase-card glass">
+          <span class="eyebrow">GUARDIAN PHASE</span>
+          <strong id="phaseName">REMEMBER THE ROOT</strong>
+          <small>THE CONCORD BANYAN</small>
+        </div>
+
+        <div class="score-card" aria-label="Run score and personal best">
+          <span class="eyebrow">CONCORD</span>
+          <strong id="scoreValue">0</strong>
+          <small id="bestValue">BEST 0</small>
+        </div>
+
+        <div class="hud-actions glass" aria-label="Game controls">
+          <button id="soundButton" class="icon-button" type="button" aria-label="Mute sound" title="Mute sound (M)">
+            <span id="soundIcon" aria-hidden="true">♪</span>
+          </button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" title="Enter fullscreen (F)">
+            <span aria-hidden="true">⛶</span>
+          </button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" title="Pause game (P or Escape)">
+            <span aria-hidden="true">Ⅱ</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="objective-card glass">
+        <span class="objective-mark" aria-hidden="true">◇</span>
+        <div>
+          <span class="eyebrow">CURRENT INTENT</span>
+          <strong id="objectiveText">ALIGN WITH THE FIRST NODE</strong>
+        </div>
+        <span id="objectiveProgress">0 / 3</span>
+      </div>
+
+      <div class="vitals-panel glass" aria-label="Heart Petals and Crownlight">
+        <div class="petal-block">
+          <div class="vital-heading">
+            <span class="eyebrow">HEART PETALS</span>
+            <strong id="healthValue">3 / 3</strong>
+          </div>
+          <div id="petalDisplay" class="petal-display" role="img" aria-label="3 of 3 Heart Petals remain">
+            <span aria-hidden="true">◆</span>
+            <span aria-hidden="true">◆</span>
+            <span aria-hidden="true">◆</span>
+          </div>
+        </div>
+
+        <div class="crownlight-block">
+          <div class="vital-heading">
+            <span class="eyebrow">CROWNLIGHT</span>
+            <strong id="crownlightValue">0%</strong>
+          </div>
+          <div class="crownlight-track" role="progressbar" aria-label="Crownlight" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <i id="crownlightFill"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="run-stats glass" aria-label="Current run statistics">
+        <div>
+          <span>MULTIPLIER</span>
+          <strong id="multiplierValue">×1.0</strong>
+        </div>
+        <div>
+          <span>SEALS</span>
+          <strong id="sealCount">0</strong>
+        </div>
+      </div>
+
+      <div class="control-hint glass" aria-hidden="true">
+        <span><kbd>POINT</kbd> align</span>
+        <span><kbd>CLICK</kbd> bind</span>
+        <span><kbd>A</kbd><kbd>D</kbd> + <kbd>SPACE</kbd></span>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" aria-hidden="true"></div>
+    <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <section id="titleOverlay" class="overlay is-visible" role="dialog" aria-modal="true" aria-labelledby="titleHeading">
+      <div class="title-panel ornate-panel">
+        <div class="studio-mark"><span aria-hidden="true">✦</span> FIRST BLOOM GAMES · A MASTERY GROVE GUARDIAN</div>
+
+        <div class="guardian-emblem" aria-hidden="true">
+          <i></i><i></i><i></i>
+          <span>◇</span>
+        </div>
+
+        <span class="tree-kicker">TREE 04 · SYNTHESIS GUARDIAN</span>
+        <h1 id="titleHeading">PRISM<span>BIND</span></h1>
+        <p class="tree-name">THE CONCORD BANYAN</p>
+        <p class="tagline">Align the arc. Catch the pulse. Close the light.</p>
+        <p class="premise">Three Mastery Seeds have found one root. Read the orbit, meet each living pulse, and weave your anchors into seals that awaken the ancient Crownheart.</p>
+
+        <div class="how-to" aria-label="How to play">
+          <article>
+            <span class="step-number">01</span>
+            <div><strong>ALIGN THE ARC</strong><small>Point toward a node. On touch, tap where you want to bind. No dragging.</small></div>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <div><strong>CATCH THE PULSE</strong><small>Click, tap, or press Space as the pulse reaches the orbit.</small></div>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <div><strong>CLOSE THE LIGHT</strong><small>Join at least three anchors, then return to the first to complete a seal.</small></div>
+          </article>
+        </div>
+
+        <div class="control-row" aria-label="Controls">
+          <span><b>MOUSE</b> point + click</span>
+          <span><b>TOUCH</b> tap</span>
+          <span><b>KEYBOARD</b> A / D or arrows + Space</span>
+        </div>
+
+        <button id="playButton" class="primary-button" type="button">
+          <span>ENTER THE CROWNHEART</span><i aria-hidden="true">→</i>
+        </button>
+        <div class="title-footer">
+          <span id="startBest">PERSONAL BEST · 0</span>
+          <span>TYPICAL RUN: 3 MINUTES · HEADPHONES LOVELY</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pause-panel ornate-panel">
+        <span class="panel-symbol" aria-hidden="true">◇</span>
+        <span class="eyebrow">THE CANOPY HOLDS YOUR PLACE</span>
+        <h2 id="pauseTitle">The Crownheart is listening.</h2>
+        <p>Your open seal, living pulses, and every awakened root will wait exactly where you left them.</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>RETURN TO THE WEAVE</span><i aria-hidden="true">→</i></button>
+        <button id="quitButton" class="text-button" type="button">End this binding</button>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+      <div class="result-panel ornate-panel">
+        <span class="result-symbol" aria-hidden="true">✦</span>
+        <span class="eyebrow">THE CONCORD BANYAN REMEMBERS</span>
+        <h2 id="resultTitle">The Crownheart awakens.</h2>
+        <p id="resultCopy" class="result-copy">Three disciplines became one living pattern beneath your hands.</p>
+
+        <div class="result-stats">
+          <article><span>SCORE</span><strong id="resultScore">0</strong></article>
+          <article><span>RANK</span><strong id="resultRank">ROOTLISTENER</strong></article>
+          <article><span>SEALS</span><strong id="resultSeals">0</strong></article>
+          <article><span>PERFECT</span><strong id="resultPerfects">0</strong></article>
+        </div>
+
+        <div class="result-best"><span>PERSONAL BEST</span><strong id="resultBest">0</strong></div>
+        <button id="replayButton" class="primary-button" type="button"><span>BIND ANOTHER CROWN</span><i aria-hidden="true">↻</i></button>
+        <button id="homeButton" class="text-button" type="button">Return to title</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
