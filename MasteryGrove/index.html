@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070817">
   <meta name="description" content="First Bloom: The Mastery Grove — master tiny games and grow a living world.">
-  <meta name="first-bloom-release" content="0.4.0-rc.11">
+  <meta name="first-bloom-release" content="0.5.0">
   <title>First Bloom: The Mastery Grove</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0-rc.11">
+  <link rel="stylesheet" href="styles.css?v=0.5.0">
+  <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <meta name="application-name" content="First Bloom: The Mastery Grove">
 </head>
 <body>
   <main id="groveApp" aria-label="First Bloom: The Mastery Grove">
@@ -448,6 +451,85 @@
       </div>
     </section>
 
+    <section id="helpOverlay" class="overlay utility-overlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-describedby="helpSummary" aria-hidden="true" inert>
+      <div class="utility-panel ornate-panel">
+        <span class="eyebrow">PLAY HELP</span>
+        <h2 id="helpTitle" tabindex="-1">Controls at a glance</h2>
+        <p id="helpSummary">The controls you need remain visible while you play. This guide can replay the opening cue without changing progress.</p>
+
+        <div class="utility-guide-grid">
+          <section class="utility-guide-card" aria-labelledby="groveHelpTitle">
+            <h3 id="groveHelpTitle">IN THE GROVE</h3>
+            <ul class="utility-control-list">
+              <li><span class="utility-key-pair" aria-hidden="true"><kbd>&larr;</kbd><kbd>&rarr;</kbd></span><span>Choose a tree. On touch, swipe the tree or rail.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">PLAY</span><span>Choose a Lumenloom bloom, then Play.</span></li>
+            </ul>
+          </section>
+
+          <section class="utility-guide-card" aria-labelledby="lumenloomHelpTitle">
+            <h3 id="lumenloomHelpTitle">IN LUMENLOOM</h3>
+            <ul class="utility-control-list">
+              <li><span class="utility-key-word" aria-hidden="true">MOVE</span><span>Use WASD or arrows. On touch, guide with your thumb.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">WEAVE</span><span>Press Space, click, or use the Weave button near a flower.</span></li>
+              <li><span class="utility-key-word" aria-hidden="true">CLOSE</span><span>Pin at least three flowers, then return to the golden first flower.</span></li>
+            </ul>
+          </section>
+        </div>
+
+        <section class="utility-context" aria-labelledby="helpContextTitle">
+          <span class="eyebrow">SELECTED BLOOM</span>
+          <h3 id="helpContextTitle">PETAL RUSH</h3>
+          <p id="helpContextCopy">Seal loops for 90 seconds. Keep at least one petal.</p>
+        </section>
+
+        <div class="utility-actions">
+          <button id="replayFirstBloomButton" class="text-button utility-replay-button" type="button">REPLAY FIRST BLOOM</button>
+          <button id="closeHelpButton" class="primary-button" type="button"><span>RETURN</span><i aria-hidden="true">&rarr;</i></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="journalOverlay" class="overlay utility-overlay" role="dialog" aria-modal="true" aria-labelledby="journalTitle" aria-describedby="journalSummary" aria-hidden="true" inert>
+      <div class="utility-panel journal-panel ornate-panel">
+        <span class="eyebrow">TREE JOURNAL &middot; 01</span>
+        <h2 id="journalTitle" tabindex="-1">The Lantern Willow</h2>
+        <p id="journalSummary">Stitch flowers into luminous shapes and wake a garden from shadow.</p>
+
+        <div class="journal-grid">
+          <section class="journal-card journal-lore" aria-labelledby="journalLoreTitle">
+            <h3 id="journalLoreTitle">THE LOOMWING</h3>
+            <p>The Hollow has swallowed every color before dawn. You are the last little loomwing&mdash;and light becomes real wherever your thread closes.</p>
+          </section>
+
+          <section class="journal-card" aria-labelledby="journalGrowthTitle">
+            <h3 id="journalGrowthTitle">HOW THE TREE GROWS</h3>
+            <p>Every finished run feeds its own tree. Tree Total sets growth; each mode keeps its own Best. Standard Night Garden alone can prove the Lantern Willow Mastery Seed.</p>
+          </section>
+
+          <section class="journal-card" aria-labelledby="journalControlsTitle">
+            <h3 id="journalControlsTitle">THE WEAVE</h3>
+            <ol>
+              <li>Glide close to a flower and begin weaving.</li>
+              <li>Touch at least two other flowers to pin the glowing thread.</li>
+              <li>Return to the first golden flower to seal the loop.</li>
+            </ol>
+          </section>
+
+          <section class="journal-card journal-modes" aria-labelledby="journalModesTitle">
+            <h3 id="journalModesTitle">FOUR BLOOMS</h3>
+            <dl>
+              <div><dt>NIGHT GARDEN</dt><dd>First Stitch, three escalating nights, blessing choices, the Hollow, and dawn.</dd></div>
+              <div><dt>PETAL RUSH</dt><dd>A 90-second score attack with 11 replenishing flowers and three petals.</dd></div>
+              <div><dt>SHIFTING CONSTELLATION</dt><dd>At Silver, match clean three-, four-, and five-flower targets before they shift. Valid off-target loops still score.</dd></div>
+              <div><dt>HOLLOW RUSH</dt><dd>At Gold, enter the Guardian arena and close three valid seals before time or petals expire.</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <button id="closeJournalButton" class="primary-button utility-close-button" type="button"><span>RETURN</span><i aria-hidden="true">&rarr;</i></button>
+      </div>
+    </section>
+
     <section id="growthOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="growthTitle" aria-describedby="growthCopy" aria-hidden="true" inert>
       <div id="growthPanel" class="growth-panel ornate-panel">
         <span id="growthSymbol" class="growth-symbol" aria-hidden="true">✦</span>
@@ -511,35 +593,35 @@
       <div class="release-info-panel ornate-panel">
         <span class="eyebrow">RELEASE INFORMATION &amp; SUPPORT</span>
         <h2 id="releaseInfoTitle" tabindex="-1">A clear window into the Grove.</h2>
-        <p id="releaseInfoSummary">Build details, privacy facts, review status, and a safe way to share technical context.</p>
+        <p id="releaseInfoSummary">Your game version, local data, credits, and ways to get help.</p>
 
         <div class="release-info-grid">
           <section class="release-info-card release-build-card" aria-labelledby="releaseBuildHeading">
             <span id="releaseBuildHeading" class="release-info-label">CURRENT BUILD</span>
-            <strong id="releaseBuildIdentity">0.4.0-rc.11</strong>
-            <small>Release candidate · web build</small>
+            <strong id="releaseBuildIdentity">0.5.0</strong>
+            <small>Web release · five playable games</small>
           </section>
 
           <section class="release-info-card release-privacy-card" aria-labelledby="releasePrivacyHeading">
-            <span id="releasePrivacyHeading" class="release-info-label">LOCAL-ONLY PLAY</span>
-            <p>First Bloom has no accounts, ads, analytics, or trackers. Scores and preferences stay in this browser; the game makes no automatic transmission of them.</p>
+            <span id="releasePrivacyHeading" class="release-info-label">YOUR PROGRESS STAYS HERE</span>
+            <p>First Bloom has no accounts, ads, tracking SDKs, or remote analytics. Scores, preferences, and local run history stay in this browser; the game makes no automatic transmission of them. Export a backup in Settings before changing devices or clearing site data.</p>
           </section>
 
           <section class="release-info-card release-review-card" aria-labelledby="releaseReviewHeading">
             <div class="release-card-heading">
-              <span id="releaseReviewHeading" class="release-info-label">CREDITS &amp; LEGAL</span>
-              <strong class="review-pending">OWNER REVIEW PENDING</strong>
+              <span id="releaseReviewHeading" class="release-info-label">ABOUT THE COLLECTION</span>
+              <strong>FIRST BLOOM GAMES</strong>
             </div>
-            <p>The privacy and credits drafts are available for review. Ownership, rights, and legal wording still require owner approval before final release.</p>
+            <p>Five arcade games with visuals and sound generated in code. Read about the collection, browser saves, local run history, and GitHub Pages hosting.</p>
             <div class="release-link-row">
-              <a href="../PRIVACY.md" target="_blank" rel="noopener">Read privacy draft</a>
-              <a href="../CREDITS.md" target="_blank" rel="noopener">Read credits draft</a>
+              <a href="../PRIVACY.md" target="_blank" rel="noopener">Privacy &amp; local data</a>
+              <a href="../CREDITS.md" target="_blank" rel="noopener">Credits</a>
             </div>
           </section>
 
           <section class="release-info-card release-support-card" aria-labelledby="releaseSupportHeading">
             <span id="releaseSupportHeading" class="release-info-label">FEEDBACK &amp; DIAGNOSTICS</span>
-            <p>If something feels wrong, copy the non-sensitive device details below and include them with a GitHub issue. Diagnostics never include scores, saves, or stored profile contents.</p>
+            <p>Tell us what happened and how to repeat it. Diagnostics include build and device details, never scores or saves. GitHub reports are public; keep personal information out. For private help, email <a href="mailto:firstbloomgames@gmail.com">First Bloom Games</a>.</p>
             <div class="release-support-actions">
               <button id="copyDiagnosticsButton" class="release-action-button" type="button">Copy diagnostics</button>
               <a class="release-action-link" href="https://github.com/FirstBloomGames/Mastery-Grove/issues/new/choose" target="_blank" rel="noopener noreferrer">Open feedback form</a>
@@ -596,14 +678,14 @@
 
   <noscript><div class="noscript-message">First Bloom needs JavaScript to run its games and preserve local progress.</div></noscript>
 
-  <script src="../Lumenloom/modes.js?v=0.4.0-rc.11"></script>
-  <script src="protocol-v2.js?v=0.4.0-rc.11"></script>
-  <script src="progression.js?v=0.4.0-rc.11"></script>
-  <script src="growth-visuals.js?v=0.4.0-rc.11"></script>
-  <script src="lumenloom-session.js?v=0.4.0-rc.11"></script>
-  <script src="profile-storage.js?v=0.4.0-rc.11"></script>
-  <script src="first-bloom.js?v=0.4.0-rc.11"></script>
-  <script src="carousel.js?v=0.4.0-rc.11"></script>
-  <script src="grove.js?v=0.4.0-rc.11"></script>
+  <script src="../Lumenloom/modes.js?v=0.5.0"></script>
+  <script src="protocol-v2.js?v=0.5.0"></script>
+  <script src="progression.js?v=0.5.0"></script>
+  <script src="growth-visuals.js?v=0.5.0"></script>
+  <script src="lumenloom-session.js?v=0.5.0"></script>
+  <script src="profile-storage.js?v=0.5.0"></script>
+  <script src="first-bloom.js?v=0.5.0"></script>
+  <script src="carousel.js?v=0.5.0"></script>
+  <script src="grove.js?v=0.5.0"></script>
 </body>
 </html>

@@ -32,6 +32,12 @@ button:focus-visible {
   outline-offset: 4px;
 }
 
+#game:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: -6px;
+  box-shadow: inset 0 0 0 2px rgba(2, 2, 13, .92);
+}
+
 #app {
   position: relative;
   width: 100%;
@@ -714,6 +720,57 @@ kbd {
   background: linear-gradient(90deg, #73e8d2, #ffd977, #ffad62);
 }
 
+:root[data-lumen-mode="shiftingConstellation"] .score-block strong {
+  color: #ead7ff;
+  text-shadow: 0 0 22px rgba(202, 156, 255, .38);
+}
+
+:root[data-lumen-mode="shiftingConstellation"] .phase-block {
+  border-color: rgba(202, 156, 255, .28);
+  background: linear-gradient(145deg, rgba(164, 112, 240, .13), rgba(115, 232, 210, .06));
+}
+
+:root[data-lumen-mode="shiftingConstellation"] .objective-card {
+  border-color: rgba(202, 156, 255, .3);
+  box-shadow: inset 0 0 28px rgba(155, 104, 228, .07);
+}
+
+:root[data-lumen-mode="shiftingConstellation"] #objectiveText {
+  color: #ead7ff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(17px, 1.7vw, 22px);
+  letter-spacing: .07em;
+}
+
+:root[data-lumen-mode="shiftingConstellation"] .objective-track i {
+  background: linear-gradient(90deg, #a976e8, #73e8d2, #ead7ff);
+}
+
+:root[data-lumen-mode="hollowRush"] .score-block strong {
+  color: #ffe4a8;
+  text-shadow: 0 0 24px rgba(255, 184, 105, .38);
+}
+
+:root[data-lumen-mode="hollowRush"] .phase-block {
+  border-color: rgba(255, 201, 126, .28);
+  background: linear-gradient(145deg, rgba(75, 45, 112, .2), rgba(255, 138, 126, .07));
+}
+
+:root[data-lumen-mode="hollowRush"] .objective-card {
+  border-color: rgba(255, 201, 126, .28);
+  box-shadow: inset 0 0 30px rgba(255, 133, 112, .065);
+}
+
+:root[data-lumen-mode="hollowRush"] #objectiveText {
+  color: #ffe4a8;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(18px, 1.8vw, 23px);
+  letter-spacing: .055em;
+}
+
+:root[data-lumen-mode="hollowRush"] .objective-track i {
+  background: linear-gradient(90deg, #9b6bd4, #ff8b79, #ffd37d);
+}
 .blessing-panel { width: min(860px, 94vw); }
 
 .blessing-choices {

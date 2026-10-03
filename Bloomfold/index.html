@@ -6,20 +6,20 @@
   <meta name="theme-color" content="#070817">
   <meta name="description" content="Bloomfold — a one-thumb dive through a living fractal.">
   <title>Bloomfold — A First Bloom Games Original</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=0.5.0">
   <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.11">
+  <meta name="first-bloom-release" content="0.5.0">
 </head>
 <body>
   <main id="app" aria-label="Bloomfold game">
     <canvas id="fractalCanvas" aria-hidden="true"></canvas>
-    <canvas id="gameCanvas" tabindex="0" aria-label="Bloomfold playfield. Move the mouse or touch around the heart, or use A and D, to orbit through glowing openings."></canvas>
+    <canvas id="gameCanvas" tabindex="0" aria-label="Bloomfold playfield. Move the mouse or touch around the heart, or use A and D, to orbit through glowing openings." aria-hidden="true" inert></canvas>
     <div class="veil" aria-hidden="true"></div>
     <div class="grain" aria-hidden="true"></div>
 
-    <section id="hud" class="hud is-hidden" aria-label="Game status">
+    <section id="hud" class="hud is-hidden" aria-label="Game status" aria-hidden="true" inert>
       <div class="hud-top">
         <div class="phase-card glass">
           <span class="eyebrow">CURRENT FOLD</span>
@@ -118,7 +118,7 @@
       </div>
     </section>
 
-    <section id="mutationOverlay" class="overlay mutation-overlay" role="dialog" aria-modal="true" aria-labelledby="mutationTitle">
+    <section id="mutationOverlay" class="overlay mutation-overlay" role="dialog" aria-modal="true" aria-labelledby="mutationTitle" aria-hidden="true" inert>
       <div class="choice-panel ornate-panel">
         <span class="choice-symbol" aria-hidden="true">⌁</span>
         <span class="eyebrow">THE FRACTAL REMEMBERS</span>
@@ -128,7 +128,7 @@
       </div>
     </section>
 
-    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+    <section id="pauseOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" aria-hidden="true" inert>
       <div class="pause-panel ornate-panel">
         <span class="choice-symbol" aria-hidden="true">◇</span>
         <span class="eyebrow">BETWEEN HEARTBEATS</span>
@@ -139,7 +139,7 @@
       </div>
     </section>
 
-    <section id="resultOverlay" class="overlay result-overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+    <section id="resultOverlay" class="overlay result-overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-hidden="true" inert>
       <div class="result-panel ornate-panel">
         <span class="result-symbol" aria-hidden="true">✦</span>
         <span class="eyebrow">SPECIMEN PRESERVED</span>
@@ -160,6 +160,6 @@
     </section>
   </main>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=0.5.0"></script>
 </body>
 </html>

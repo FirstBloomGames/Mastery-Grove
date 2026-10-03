@@ -356,6 +356,7 @@
     failureTime: 0,
     lastTime: performance.now(),
   };
+  let animationFrameId = 0;
 
   function postToGrove(type, payload = {}) {
     if (!isEmbedded) return;
@@ -1192,12 +1193,15 @@
     setAriaHidden(ui.resultOverlay, true);
     ui.startBest.textContent = `PERSONAL BEST · ${format(game.best)}`;
     window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 30);
+    game.lastTime = performance.now();
+    scheduleFrame();
   }
 
   function pauseGame() {
     if (!["playing", "phaseIntro", "phaseClear", "awakening", "failing"].includes(game.mode)) return;
     game.modeBeforePause = game.mode;
     game.mode = "paused";
+    stopFrameLoop();
     clearTransientStatus();
     input.keys.clear();
     ui.pauseOverlay.inert = false;
@@ -1226,6 +1230,7 @@
     setAriaHidden(ui.pauseOverlay, true);
     window.setTimeout(() => canvas.focus({ preventScroll: true }), 30);
     audio.init();
+    scheduleFrame();
   }
 
   function updateObjective() {
@@ -2541,12 +2546,24 @@
     document.body.appendChild(panel);
   }
 
+  function scheduleFrame() {
+    if (animationFrameId || document.hidden || game.mode === "paused") return;
+    animationFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopFrameLoop() {
+    if (!animationFrameId) return;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = 0;
+  }
+
   function frame(now) {
+    animationFrameId = 0;
     const dt = clamp((now - game.lastTime) / 1000, 0, 0.05);
     game.lastTime = now;
     update(dt);
     draw();
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }
 
   canvas.addEventListener("pointermove", (event) => {
@@ -2590,7 +2607,13 @@
     if (["playing", "phaseIntro", "phaseClear", "awakening", "failing"].includes(game.mode)) pauseGame();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && ["playing", "phaseIntro", "phaseClear", "awakening", "failing"].includes(game.mode)) pauseGame();
+    if (document.hidden) {
+      stopFrameLoop();
+      if (["playing", "phaseIntro", "phaseClear", "awakening", "failing"].includes(game.mode)) pauseGame();
+    } else {
+      game.lastTime = performance.now();
+      scheduleFrame();
+    }
   });
   window.addEventListener("resize", () => { view.needsResize = true; resizeCanvas(true); });
   if (typeof ResizeObserver === "function") {
@@ -2642,5 +2665,5 @@
   updateHud(true);
   postToGrove("game-ready");
   window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 100);
-  requestAnimationFrame(frame);
+  scheduleFrame();
 })();

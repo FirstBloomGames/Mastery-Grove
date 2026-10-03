@@ -4,9 +4,12 @@
   const $ = (id) => document.getElementById(id);
   const TAU = Math.PI * 2;
   const RUN_DURATION = 90;
+  const MOBILE_GAMEPLAY_DPR_CAP = 1.5;
+  const DESKTOP_GAMEPLAY_DPR_CAP = 2;
   const PLAYER_RADIUS = 0.36;
   const MUTATION_TIMES = [30, 60];
   const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const coarsePointerQuery = window.matchMedia?.('(pointer: coarse)');
   let reducedMotion = motionQuery?.matches ?? false;
   const pageParams = new URLSearchParams(window.location.search);
   const isTrialRun = pageParams.get('trial') === '1';
@@ -61,6 +64,14 @@
     resultPerfects: $('resultPerfects'),
     specimenCode: $('specimenCode')
   };
+
+  const dialogOverlays = Object.freeze([
+    ui.startOverlay,
+    ui.mutationOverlay,
+    ui.pauseOverlay,
+    ui.resultOverlay
+  ]);
+  let focusBeforeDialog = null;
 
   if (isGroveHosted) {
     document.documentElement.dataset.groveHosted = 'true';
@@ -610,6 +621,7 @@
 
   let state = createInitialState();
   let lastFrame = performance.now();
+  let animationFrameId = 0;
   let toastTimer = 0;
   let uiTick = 0;
 
@@ -660,6 +672,47 @@
         personalGap: 1
       }
     };
+  }
+
+  function setAriaHidden(element, hidden) {
+    element.setAttribute('aria-hidden', String(Boolean(hidden)));
+  }
+
+  function activeDialog() {
+    return dialogOverlays.find((overlay) => overlay.classList.contains('is-visible')) || null;
+  }
+
+  function syncDialogState() {
+    const active = activeDialog();
+    dialogOverlays.forEach((overlay) => {
+      const visible = overlay === active;
+      overlay.inert = !visible;
+      setAriaHidden(overlay, !visible);
+    });
+    const backgroundHidden = Boolean(active);
+    ui.hud.inert = backgroundHidden;
+    gameCanvas.inert = backgroundHidden;
+    setAriaHidden(ui.hud, backgroundHidden || ui.hud.classList.contains('is-hidden'));
+    setAriaHidden(gameCanvas, backgroundHidden);
+  }
+
+  function openDialog(overlay, focusTarget = null) {
+    if (!activeDialog()) focusBeforeDialog = document.activeElement;
+    dialogOverlays.forEach((candidate) => candidate.classList.toggle('is-visible', candidate === overlay));
+    syncDialogState();
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+      window.setTimeout(() => {
+        if (activeDialog() === overlay) focusTarget.focus({ preventScroll: true });
+      }, 100);
+    }
+  }
+
+  function closeDialogs(focusTarget = null) {
+    dialogOverlays.forEach((overlay) => overlay.classList.remove('is-visible'));
+    syncDialogState();
+    const target = focusTarget || focusBeforeDialog;
+    focusBeforeDialog = null;
+    if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
   }
 
   function phaseAt(time) {
@@ -713,18 +766,14 @@
     input.pointerActive = false;
     input.pointerId = null;
     input.targetAngle = state.playerAngle;
-    ui.startOverlay.classList.remove('is-visible');
-    ui.resultOverlay.classList.remove('is-visible');
-    ui.pauseOverlay.classList.remove('is-visible');
-    ui.mutationOverlay.classList.remove('is-visible');
     ui.hud.classList.remove('is-hidden');
+    closeDialogs(gameCanvas);
     ui.guideCard.classList.remove('is-fading');
     ui.guideText.textContent = 'POINT AT THE CYAN OPENING';
     ui.mutationStrip.replaceChildren();
     updatePetals();
     audio.start();
     showToast('Follow the cyan opening. The first folds cannot hurt you.', false, 2.8);
-    gameCanvas.focus?.();
     updateHud(true);
   }
 
@@ -987,9 +1036,8 @@
       ui.mutationChoices.appendChild(button);
     });
 
-    ui.mutationOverlay.classList.add('is-visible');
     audio.mutate(state.mutationCount);
-    setTimeout(() => ui.mutationChoices.querySelector('button')?.focus(), 120);
+    openDialog(ui.mutationOverlay, ui.mutationChoices.querySelector('button'));
   }
 
   function chooseMutation(mutation) {
@@ -1004,13 +1052,12 @@
     visual.targetDepth = mutation.preset.depth;
     visual.pulse = 1.4;
     addMutationChip(mutation);
-    ui.mutationOverlay.classList.remove('is-visible');
     state.mode = 'playing';
     state.grace = 1.5;
     state.spawnTimer = 1.5;
     updatePetals();
     showToast(`${mutation.name.toUpperCase()} HAS TAKEN ROOT`, false, 1.8);
-    gameCanvas.focus?.();
+    closeDialogs();
   }
 
   function addMutationChip(mutation) {
@@ -1115,8 +1162,7 @@
       ui.replayButton.querySelector('i')?.setAttribute('hidden', '');
       ui.replayButton.setAttribute('aria-label', 'Trial run complete. Continue in the Grove.');
     }
-    ui.resultOverlay.classList.add('is-visible');
-    if (!isTrialRun) setTimeout(() => ui.replayButton.focus(), 120);
+    openDialog(ui.resultOverlay, isTrialRun ? ui.homeButton : ui.replayButton);
   }
 
   function generateBloomName() {
@@ -1552,20 +1598,21 @@
     if (state.mode !== 'playing') return;
     state.previousMode = state.mode;
     state.mode = 'paused';
+    stopFrameLoop();
     audio.suspend();
     input.keys.clear();
     input.pointerActive = false;
-    ui.pauseOverlay.classList.add('is-visible');
-    setTimeout(() => ui.resumeButton.focus(), 100);
+    openDialog(ui.pauseOverlay, ui.resumeButton);
   }
 
   function resumeGame() {
     if (state.mode !== 'paused') return;
     state.mode = 'playing';
+    lastFrame = performance.now();
     audio.start();
     state.grace = Math.max(state.grace, 1.5);
-    ui.pauseOverlay.classList.remove('is-visible');
-    gameCanvas.focus?.();
+    closeDialogs();
+    scheduleFrame();
   }
 
   function goHome() {
@@ -1574,20 +1621,26 @@
     state.rings.length = 0;
     state.particles.length = 0;
     ui.hud.classList.add('is-hidden');
-    ui.pauseOverlay.classList.remove('is-visible');
-    ui.resultOverlay.classList.remove('is-visible');
-    ui.mutationOverlay.classList.remove('is-visible');
     ui.startBest.textContent = `PERSONAL BEST · ${formatNumber(state.best)}`;
-    ui.startOverlay.classList.add('is-visible');
     visual.targetFreeze = 0;
     visual.targetEnergy = .26;
-    setTimeout(() => ui.playButton.focus(), 100);
+    openDialog(ui.startOverlay, ui.playButton);
+    lastFrame = performance.now();
+    scheduleFrame();
+  }
+
+  function resolveGameplayDpr(width, height) {
+    const touchPoints = Math.max(0, Number(navigator.maxTouchPoints) || 0);
+    const mobileCanvas = Boolean(coarsePointerQuery?.matches)
+      || (touchPoints > 0 && (width <= 1366 || height <= 1024));
+    const cap = mobileCanvas ? MOBILE_GAMEPLAY_DPR_CAP : DESKTOP_GAMEPLAY_DPR_CAP;
+    return Math.min(window.devicePixelRatio || 1, cap);
   }
 
   function resize() {
     view.width = window.innerWidth;
     view.height = window.innerHeight;
-    view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    view.dpr = resolveGameplayDpr(view.width, view.height);
     view.cx = view.width / 2;
     view.cy = view.height / 2;
     view.scale = Math.min(view.width, view.height);
@@ -1635,22 +1688,26 @@
   }
 
   function trapModalFocus(event) {
-    if (isEmbedded) return false;
     if (event.key !== 'Tab') return false;
-    const overlay = [ui.startOverlay, ui.mutationOverlay, ui.pauseOverlay, ui.resultOverlay]
-      .find((candidate) => candidate.classList.contains('is-visible'));
+    const overlay = activeDialog();
     if (!overlay) return false;
     const focusable = [...overlay.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0);
     if (!focusable.length) return false;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+    if (!overlay.contains(document.activeElement)) {
+      event.preventDefault();
+      const boundary = event.shiftKey ? last : first;
+      boundary.focus();
+      return true;
+    }
+    if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
       return true;
     }
-    if (!event.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) {
+    if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault();
       first.focus();
       return true;
@@ -1658,7 +1715,19 @@
     return false;
   }
 
+  function scheduleFrame() {
+    if (animationFrameId || document.hidden || state.mode === 'paused') return;
+    animationFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopFrameLoop() {
+    if (!animationFrameId) return;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = 0;
+  }
+
   function frame(now) {
+    animationFrameId = 0;
     const dt = Math.min(.033, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     if (state.mode === 'playing') updatePlaying(dt);
@@ -1669,7 +1738,7 @@
     updateHud();
     renderer.render(visual);
     drawGame();
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }
 
   window.addEventListener('resize', resize);
@@ -1679,7 +1748,13 @@
     if (state.mode === 'playing') pauseGame();
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && state.mode === 'playing') pauseGame();
+    if (document.hidden) {
+      stopFrameLoop();
+      if (state.mode === 'playing') pauseGame();
+    } else {
+      lastFrame = performance.now();
+      scheduleFrame();
+    }
   });
 
   window.addEventListener('keydown', (event) => {
@@ -1768,6 +1843,7 @@
   resetVisualForSeed(state.seed);
   resize();
   setupQaControls();
+  syncDialogState();
   postToGrove('game-ready');
-  requestAnimationFrame(frame);
+  scheduleFrame();
 })();

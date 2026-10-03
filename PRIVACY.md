@@ -1,26 +1,33 @@
-# Privacy notice — owner-review draft
+# Privacy and local data
 
-> **PUBLICATION GATE:** Owner and qualified legal/privacy review are required before this draft is treated as the final policy or used for a store or portal submission.
+First Bloom: The Mastery Grove · First Bloom Games
 
-- Runtime behavior last reviewed: 2026-07-13
-- Effective date: Pending owner approval
-- Studio name: First Bloom Games
-- Publisher/legal entity and final rights holder: Pending owner approval
-- Final privacy contact: Pending owner approval
-- Pre-release technical feedback: https://github.com/FirstBloomGames/Mastery-Grove/issues
+Updated October 3, 2026
 
-## Current release behavior
+Contact: [firstbloomgames@gmail.com](mailto:firstbloomgames@gmail.com)
 
-The allowlisted First Bloom web runtime has no accounts, advertising SDKs, analytics, trackers, external assets, or network API calls. It stores gameplay progress locally in the player's browser, including Grove totals and personal bests under keys such as `first-bloom-grove-v1`, its `first-bloom-grove-v1-backup` recovery copy, `lumenloom-best`, `bloomfold-best`, `bloomfold-specimens`, `ripplewake-best`, and `prismbind-best`.
+## Playing the game
 
-That information remains on the device unless the player clears browser/site data or uses the in-game reset. A player can explicitly export it as a JSON backup file and later choose that file for local import. The current game code does not transmit it to First Bloom Games.
+The game has no accounts, ads, tracking SDKs, or remote analytics. Its code does not upload scores, saves, preferences, or local run history to First Bloom Games. It does not ask for your name, email address, age, or location to play.
 
-## Distribution-platform notice
+Game progress is stored in this browser on this device. It does not automatically follow you to another browser, device, or website address. The browser may remove local data when you clear site data, end a private browsing session, or change storage settings.
 
-The website host, game portal, app store, mobile wrapper, advertising provider, or future analytics/crash service may collect information independently. Their actual behavior and policies must be reviewed and disclosed here before release. If any SDK or remote service is added, this draft is no longer complete.
+## What stays in the browser
 
-## Player requests and retention
+- **Grove profile and recovery copy:** tree totals, personal bests, earned rewards, game and mode progress, Trial history, and preferences. The keys are `first-bloom-grove-v1` and `first-bloom-grove-v1-backup`.
+- **Standalone game records:** personal bests under `lumenloom-best`, `bloomfold-best`, `ripplewake-best`, `prismbind-best`, and `mothchorus-best-v1`. Bloomfold also keeps its local specimen gallery under `bloomfold-specimens`.
+- **Mothchorus settings and local history:** `mothchorus-settings-v1` stores preferences. `mothchorus-playtest-v1` retains the most recent 12 run summaries, including play mode, input counts, scores, voice and gate outcomes, and frame timings, plus cumulative run, score, restart, and exit counters. These records stay local; the game does not send them to the studio.
 
-The final publisher identity, applicable jurisdictions, formal privacy contact, retention statement, children's-privacy position, and request process remain pending owner and qualified review. Local-only gameplay data can presently be removed through the Grove reset or browser/site-data controls. An exported backup remains wherever the player chooses to save it until the player deletes it.
+## Backups and deletion
 
-The public issue tracker is suitable for pre-release technical feedback only. Players should not post personal, confidential, exported-save, or other sensitive information there.
+Settings lets you export your Grove profile and Bloomfold gallery to a JSON file and import a backup you choose. An export does not include Mothchorus's separate local settings or run history. Backup files remain wherever you save them until you delete them; the game does not manage those copies.
+
+**Reset all local progress** requires a second confirmation. It resets the Grove profile and recovery copy, removes standalone bests, the Bloomfold gallery, and Mothchorus's local run history. Mothchorus's separate preferences remain. To remove all game data and preferences for this site, use your browser's site-data controls. Clearing browser data or resetting the game does not delete exported files. Export valued progress before either action.
+
+## Website hosting and feedback
+
+This web game is hosted on GitHub Pages. Loading its files sends ordinary web requests to GitHub. GitHub says it records visitors' IP addresses for security, including visitors without a GitHub account. See [GitHub Pages data collection](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#data-collection) and the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+
+The feedback link opens GitHub, whose own privacy rules apply. Issues are public: do not include exported saves, personal details, or private screenshots. **Copy diagnostics** runs only when you select it and produces build and device information without scores or save contents. Nothing is sent automatically; you choose whether to share it.
+
+For a private support or privacy question, email [firstbloomgames@gmail.com](mailto:firstbloomgames@gmail.com). Sending a message shares your email address and the information you include with First Bloom Games and the email services handling it. Parents and guardians can use the same contact. The studio cannot access or delete gameplay data that exists only in your browser or your exported files.

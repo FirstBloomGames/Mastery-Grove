@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#06121d">
   <meta name="description" content="Ripplewake — skip moonstones across a living lake and bloom the water with every perfect touch.">
   <title>Ripplewake — A First Bloom Games Original</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=0.5.0">
   <link rel="icon" type="image/svg+xml" href="../release-assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="application-name" content="First Bloom: The Mastery Grove">
-  <meta name="first-bloom-release" content="0.4.0-rc.11">
+  <meta name="first-bloom-release" content="0.5.0">
 </head>
 <body>
   <main id="app" aria-label="Ripplewake game">
@@ -34,7 +34,7 @@
 
         <div class="hud-actions glass">
           <button id="soundButton" class="icon-button" type="button" aria-label="Mute sound" title="Mute sound (M)"><span id="soundIcon" aria-hidden="true">♪</span></button>
-          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" title="Enter fullscreen"><span aria-hidden="true">⛶</span></button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Enter fullscreen" aria-pressed="false" title="Enter fullscreen"><span aria-hidden="true">⛶</span></button>
           <button id="pauseButton" class="icon-button" type="button" aria-label="Pause game" title="Pause (P)"><span aria-hidden="true">Ⅱ</span></button>
         </div>
       </div>
@@ -135,7 +135,7 @@
     </section>
   </main>
 
-  <script src="rules.js"></script>
-  <script src="game.js"></script>
+  <script src="rules.js?v=0.5.0"></script>
+  <script src="game.js?v=0.5.0"></script>
 </body>
 </html>

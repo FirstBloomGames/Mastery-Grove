@@ -738,7 +738,8 @@ kbd {
 
 .text-button {
   margin-top: 15px;
-  padding: 9px 13px;
+  min-height: 44px;
+  padding: 10px 13px;
   border: 0;
   color: rgba(230, 245, 225, .76);
   background: transparent;

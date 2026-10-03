@@ -1,31 +1,27 @@
-# Credits and rights — owner-review draft
-
-> **PUBLICATION GATE:** The owner must confirm authorship, ownership, licenses, attribution obligations, and final credit wording before distribution.
-
-## Product
+# Credits
 
 **First Bloom: The Mastery Grove**
-Including Lumenloom, Bloomfold, Ripplewake, and Prismbind.
 
-- Studio name: First Bloom Games
-- Publisher / final rights holder: Pending owner approval
-- Creative direction credit: Pending owner-approved wording
-- Design and engineering credit: Pending owner-approved wording
-- Copyright notice: Pending owner approval
-- Pre-release technical feedback: https://github.com/FirstBloomGames/Mastery-Grove/issues
-- Final public and legal contact: Pending owner approval
+A game collection from **First Bloom Games**.
 
-## Current allowlisted runtime
+## The five games
 
-The release build uses procedural HTML, CSS, Canvas/WebGL, and Web Audio code from the five product folders. The allowlisted runtime contains no external fonts, images, audio files, packages, or third-party SDKs.
+- **Lumenloom** — the Lantern Willow: light-weaving movement and path planning.
+- **Bloomfold** — the Recursive Orchid: orbital control through a living fractal.
+- **Ripplewake** — the Echo Alder: stone skipping through aim and timing.
+- **Prismbind** — the Concord Banyan: the Guardian of the three foundational disciplines.
+- **Mothchorus** — the Choir Linden: one shared moth choir, played Solo or Together.
 
-Staging audio, progress videos, review frames, Unity projects, backups, logs, and package caches elsewhere in the workspace are explicitly excluded from `dist` and must not be copied into a public build.
+The Mastery Grove connects the games through tree growth, Mastery Seeds, the Crownheart, and the Threefold Trial.
 
-## Before publication
+## How it is made
 
-- Confirm that every runtime contribution is owned or licensed for commercial distribution.
-- Add any required contributor and technology acknowledgements.
-- Review names, logos, store assets, and platform SDK terms.
-- Record any newly added third-party asset or service here with its license and attribution text.
+The web game uses HTML, CSS, and JavaScript with Canvas 2D, WebGL, and Web Audio. Its visuals and sound are generated in code. The distributed runtime does not load external fonts, image or audio libraries, third-party game packages, or advertising and analytics SDKs.
 
-The public issue tracker is a pre-release bug and playtest route, not a final legal or privacy contact. Do not post personal, confidential, or sensitive information there.
+The browser supplies these web technologies. The public web build is hosted on GitHub Pages.
+
+## Contact
+
+Studio, credits, and rights enquiries: [firstbloomgames@gmail.com](mailto:firstbloomgames@gmail.com).
+
+Report a game problem through the [feedback form](https://github.com/FirstBloomGames/Mastery-Grove/issues/new/choose). Issues are public; keep personal information and exported saves out of reports. See [Privacy and local data](PRIVACY.md) for browser storage, hosting, and support details.

@@ -182,6 +182,7 @@
     titleRippleAt: 0,
     reducedMotion: motionQuery?.matches ?? false
   };
+  let animationFrameId = 0;
 
   class LakeAudio {
     constructor() {
@@ -931,6 +932,8 @@
     ui.startBest.textContent = `PERSONAL BEST · ${format(game.best)}`;
     ui.startOverlay.classList.add("is-visible");
     window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 420);
+    game.lastTime = performance.now();
+    scheduleFrame();
   }
 
   function pause() {
@@ -938,6 +941,7 @@
     game.modeBeforePause = game.mode;
     game.pauseAt = performance.now();
     game.mode = "paused";
+    stopFrameLoop();
     audio.suspend();
     ui.hud.inert = true;
     canvas.inert = true;
@@ -955,6 +959,7 @@
     }
     if (game.transitionUntil) game.transitionUntil += pausedFor;
     game.mode = game.modeBeforePause;
+    game.lastTime = now;
     ui.pauseOverlay.classList.remove("is-visible");
     ui.hud.inert = false;
     canvas.inert = false;
@@ -962,6 +967,7 @@
     lockViewport();
     canvas.focus({ preventScroll: true });
     requestAnimationFrame(lockViewport);
+    scheduleFrame();
   }
 
   function setPrompt(text, hint, state = "") {
@@ -1631,6 +1637,13 @@
     }
   }
 
+  function syncFullscreenButton() {
+    const isFullscreen = Boolean(document.fullscreenElement);
+    const label = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
+    ui.fullscreenButton.setAttribute("aria-label", label);
+    ui.fullscreenButton.setAttribute("aria-pressed", String(isFullscreen));
+    ui.fullscreenButton.title = label;
+  }
   ui.playButton.addEventListener("click", startRun);
   ui.replayButton.addEventListener("click", startRun);
   ui.homeButton.addEventListener("click", returnHome);
@@ -1644,7 +1657,10 @@
   ui.fullscreenButton.addEventListener("click", toggleFullscreen);
 
   window.addEventListener("resize", resize);
-  document.addEventListener("fullscreenchange", resize);
+  document.addEventListener("fullscreenchange", () => {
+    syncFullscreenButton();
+    resize();
+  });
   motionQuery?.addEventListener?.("change", (event) => {
     game.reducedMotion = event.matches;
     if (game.reducedMotion) {
@@ -1653,25 +1669,44 @@
     }
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && ["aim", "flight", "between"].includes(game.mode)) pause();
+    if (document.hidden) {
+      stopFrameLoop();
+      if (["aim", "flight", "between"].includes(game.mode)) pause();
+    } else {
+      game.lastTime = performance.now();
+      scheduleFrame();
+    }
   });
   window.addEventListener("blur", () => {
     if (["aim", "flight", "between"].includes(game.mode)) pause();
   });
 
+  function scheduleFrame() {
+    if (animationFrameId || document.hidden || game.mode === "paused") return;
+    animationFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopFrameLoop() {
+    if (!animationFrameId) return;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = 0;
+  }
+
   function frame(now) {
+    animationFrameId = 0;
     const delta = Math.min(0.033, Math.max(0, (now - game.lastTime) / 1000));
     game.lastTime = now;
     update(now, delta);
     render(now);
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }
 
+  syncFullscreenButton();
   resize();
   ui.hud.inert = true;
   canvas.inert = true;
   ui.startBest.textContent = `PERSONAL BEST · ${format(game.best)}`;
   ui.bestValue.textContent = `BEST ${format(game.best)}`;
   postToGrove("game-ready");
-  requestAnimationFrame(frame);
+  scheduleFrame();
 })();

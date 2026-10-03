@@ -969,6 +969,215 @@ button:focus-visible {
 
 .overlay.is-visible { visibility: visible; opacity: 1; pointer-events: auto; }
 
+/* D-029 optional utility layer. Help stays concise and functional; longer
+   lore and mode explanations live in the Journal. These panels use only
+   static CSS so opening them adds no render loop or decorative animation. */
+.utility-overlay {
+  align-items: center;
+  padding:
+    max(14px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+}
+
+.utility-panel {
+  display: grid;
+  width: min(100%, 900px);
+  max-height: calc(100svh - max(28px, env(safe-area-inset-top)) - max(28px, env(safe-area-inset-bottom)));
+  gap: 16px;
+  padding: clamp(18px, 4vw, 34px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--paper);
+}
+
+.utility-panel > .eyebrow { color: var(--cyan-bright); }
+
+.utility-panel h2 {
+  margin: 0;
+  font: 400 clamp(30px, 5vw, 48px)/1 Georgia, "Times New Roman", serif;
+}
+
+.utility-panel > p {
+  max-width: 70ch;
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.55;
+}
+
+.utility-guide-grid,
+.journal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.utility-guide-card,
+.utility-context,
+.journal-card {
+  min-width: 0;
+  padding: clamp(14px, 2.4vw, 20px);
+  border: 1px solid rgba(255, 255, 255, .11);
+  border-radius: 4px 18px 4px 18px;
+  background: linear-gradient(145deg, rgba(14, 19, 52, .72), rgba(8, 11, 34, .54));
+}
+
+.utility-guide-card h3,
+.utility-context h3,
+.journal-card h3 {
+  margin: 0 0 10px;
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+
+.utility-control-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.utility-control-list li {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.utility-key-pair,
+.utility-key-word {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid rgba(130, 244, 238, .24);
+  border-radius: 12px 3px 12px 3px;
+  color: var(--cyan-bright);
+  background: rgba(6, 10, 30, .62);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.utility-key-pair kbd {
+  font: inherit;
+}
+
+.utility-context {
+  border-color: rgba(255, 215, 115, .2);
+  background: linear-gradient(145deg, rgba(44, 30, 60, .68), rgba(11, 18, 43, .58));
+}
+
+.utility-context > .eyebrow { display: block; margin-bottom: 4px; }
+.utility-context h3 { margin-bottom: 5px; color: var(--gold); }
+.utility-context p { margin: 0; color: var(--muted); line-height: 1.45; }
+
+.utility-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.utility-actions button,
+.utility-close-button {
+  min-height: 44px;
+}
+
+.utility-replay-button {
+  min-width: min(100%, 220px);
+  border: 1px solid rgba(130, 244, 238, .18);
+  border-radius: 13px 3px 13px 3px;
+}
+
+.journal-panel { width: min(100%, 960px); }
+
+.journal-card p,
+.journal-card ol,
+.journal-card dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.journal-card ol {
+  display: grid;
+  gap: 7px;
+  padding-left: 21px;
+}
+
+.journal-lore {
+  border-color: rgba(255, 215, 115, .21);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(255, 215, 115, .1), transparent 35%),
+    linear-gradient(145deg, rgba(41, 26, 60, .72), rgba(8, 14, 40, .58));
+}
+
+.journal-modes { grid-column: 1 / -1; }
+
+.journal-modes dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.journal-modes dl > div {
+  padding: 12px;
+  border-left: 2px solid rgba(184, 154, 255, .32);
+  background: rgba(7, 10, 31, .38);
+}
+
+.journal-modes dt {
+  margin-bottom: 4px;
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.utility-close-button { justify-self: end; }
+
+@media (max-width: 599px) {
+  .utility-overlay {
+    align-items: start;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .utility-panel {
+    max-height: calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    gap: 12px;
+    padding: 17px 13px;
+  }
+
+  .utility-panel h2 { font-size: clamp(27px, 9vw, 38px); }
+  .utility-guide-grid,
+  .journal-grid,
+  .journal-modes dl { grid-template-columns: minmax(0, 1fr); }
+  .journal-modes { grid-column: auto; }
+  .utility-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .utility-actions button,
+  .utility-close-button { width: 100%; min-width: 0; }
+  .utility-close-button { justify-self: stretch; }
+}
+
 /* D-029 — First Bloom is a playable opening, not an instruction screen.
    The clearing uses static gradients and a handful of bounded cue/reveal
    transitions so it stays vivid without adding a second render loop. */
@@ -1371,6 +1580,9 @@ button:focus-visible {
   pointer-events: none;
   transform: translate(-50%, -50%) rotate(-8deg);
   transition: left .2s ease, top .2s ease, transform .26s ease, opacity .28s ease;
+}
+
+.first-bloom-overlay.is-visible .first-bloom-loomwing {
   animation: first-bloom-breathe 2.8s ease-in-out infinite;
 }
 
@@ -1428,8 +1640,8 @@ button:focus-visible {
   border-radius: inherit;
 }
 
-.first-bloom-cue.is-cued,
-.phase-await-movement .first-bloom-cue {
+.first-bloom-overlay.is-visible .first-bloom-cue.is-cued,
+.first-bloom-overlay.is-visible.phase-await-movement .first-bloom-cue {
   opacity: .8;
   animation: first-bloom-cue 1.8s ease-out infinite;
 }
@@ -2774,12 +2986,12 @@ button:focus-visible {
 
   .living-carousel-selected-header { gap: 8px; }
   .living-carousel-identity > strong { font-size: clamp(20px, 7vw, 27px); }
-  .living-carousel-identity > span:last-child { font-size: 9px; letter-spacing: .07em; }
+  .living-carousel-identity > span:last-child { font-size: 11px; letter-spacing: .07em; }
   .living-carousel-utilities { gap: 4px; }
   .living-carousel-status-chip {
     min-height: 30px;
     padding: 0 6px;
-    font-size: 8px;
+    font-size: 10px;
     letter-spacing: .04em;
   }
   .living-carousel-utility { width: 44px; padding: 0; font-size: 14px; }
@@ -2787,8 +2999,9 @@ button:focus-visible {
   .living-carousel-tree-visual { width: clamp(130px, 43vw, 190px); }
   .living-carousel-tree-symbol { width: 46px; height: 46px; font-size: 22px; }
   .living-carousel-stage-label { bottom: 1px; padding: 5px 7px; }
-  .living-carousel-stage-label span { font-size: 9px; }
+  .living-carousel-stage-label span { font-size: 11px; }
   .living-carousel-stage-label strong { font-size: 15px; }
+  .living-carousel-stage-label small { font-size: 10px; }
   .living-carousel-stage.has-transfer .living-carousel-tree-visual {
     transform: translateY(-10%) scale(.9);
   }
@@ -2801,6 +3014,8 @@ button:focus-visible {
     gap: 7px;
     padding: 4px 5px 4px 10px;
   }
+  .living-carousel-transfer-copy > span,
+  .living-carousel-transfer-copy > small { font-size: 10px; }
   .living-carousel-transfer-copy > strong { font-size: 21px; }
   .living-carousel-transfer-motes i:nth-child(n+7) { display: none; }
 
@@ -2810,7 +3025,7 @@ button:focus-visible {
   }
   .living-carousel-metrics { gap: 5px; }
   .living-carousel-metrics > div { min-height: 42px; padding: 5px 8px; }
-  .living-carousel-metrics span { font-size: 9px; }
+  .living-carousel-metrics span { font-size: 11px; }
   .living-carousel-metrics strong { font-size: 15px; }
   .living-carousel-modes { gap: 5px; }
   .living-carousel-mode span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
@@ -2821,7 +3036,7 @@ button:focus-visible {
   .living-carousel-harmony { min-height: 44px; padding: 0 8px; }
   .living-carousel-session span,
   .living-carousel-trial strong,
-  .living-carousel-harmony strong { font-size: 9px; }
+  .living-carousel-harmony strong { font-size: 11px; }
 
   .living-carousel-pages { display: block; }
   .living-carousel-page {
@@ -2830,7 +3045,8 @@ button:focus-visible {
     gap: 7px;
   }
   .living-carousel-navigation-heading { font-size: 11px; }
-  .living-carousel-option[data-carousel-game]::before { font-size: clamp(7px, 2.1vw, 9px); }
+  .living-carousel-option[data-carousel-game]::before { font-size: clamp(8px, 2.6vw, 10px); }
+  .living-carousel-option > small { font-size: 9px; }
   .living-carousel-rail[data-carousel-page="0"] .living-carousel-page[data-carousel-page-group="1"],
   .living-carousel-rail[data-carousel-page="1"] .living-carousel-page[data-carousel-page-group="0"] {
     display: none;

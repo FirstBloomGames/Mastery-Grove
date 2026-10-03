@@ -226,12 +226,24 @@
   }
 
   function blockedByPending(state, rawMessage) {
-    if (state.pending.kind === "start") {
-      const runId = typeof rawMessage?.runId === "string" ? rawMessage.runId : state.pending.runId;
-      const rejected = protocol.rejectStart(state.session, runId, "save-failed");
-      return failure("save-failed", state, { response: rejected.response || null });
-    }
     const transitioned = protocol.receive(state.session, rawMessage);
+    if (state.pending.kind === "start") {
+      if (!transitioned.ok) {
+        return failure(transitioned.code, state, {
+          response: transitioned.response || null,
+          transaction: state.pending
+        });
+      }
+      const runId = transitioned.message.runId;
+      const reason = runId === state.pending.runId
+        ? "save-failed"
+        : "out-of-order";
+      const rejected = protocol.rejectStart(state.session, runId, reason);
+      return failure(reason, state, {
+        response: rejected.response || null,
+        transaction: state.pending
+      });
+    }
     return transitioned.ok
       ? success(transitioned.code, {
         state: stateWith(state, { session: transitioned.session }),

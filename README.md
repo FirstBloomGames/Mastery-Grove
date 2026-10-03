@@ -1,62 +1,49 @@
-# First Bloom release candidate
+# First Bloom: The Mastery Grove
 
-Current build: **0.4.0-rc.11**
+**Version 0.5.0 · web release**
 
-This candidate makes the Living Carousel unmistakably multi-game on phones. The five implemented tree selectors now visibly carry their game names, a concise Choose Game cue identifies the rail, and the main action names the selected game or Lumenloom mode. Lumenloom, Bloomfold, and Ripplewake remain awake from the beginning; Prismbind and Mothchorus retain their canonical progression gates. Swipe protection is now scoped to the swiped tree surfaces, so a quick Play tap can never be swallowed after changing games.
+Play tiny arcade games and grow a living grove. [Enter the Mastery Grove](index.html).
 
-This candidate makes every saved run visibly feed its own tree in the **Living Carousel**. Score transfer starts only after verified persistence, selects the returning tree, lands on the exact lifetime total within 2.5 seconds, and can be skipped immediately by Retry, Play, or tree selection. Lumenloom grows continuously within each stage; Trees 02–05 use deterministic stage forms; Full Bloom continues into uncapped, truthfully labeled Everbloom rings with six bounded visual tiers. Routine result modals are retired, rare milestone ceremonies remain, and phone/reduced-motion paths use fixed pools and explicit rendering caps.
+## Choose a tree
 
-After First Bloom, Petal Rush is the remembered Lumenloom default: an immediate 90-second score attack with 11 replenished flowers, three petals, 100 Lumen, a 3.2-second fray window, deterministic threat replacement, exact capped proof/scoring, and parent-owned protocol-v2 Restart and Grove actions. Trial continues to force Standard without overwriting the player’s Petal selection. Standard Night Garden, canonical Mastery Seeds, profile migration, storage recovery, and all four existing protocol-v1 games remain regression-protected.
+- **Lumenloom:** weave light through flowers and close loops. Begin with the quick 90-second Petal Rush or play Night Garden; tree growth unlocks Shifting Constellation and Hollow Rush.
+- **Bloomfold:** guide an orbit through a living fractal.
+- **Ripplewake:** aim a stone and time its skips across a moonlit lake.
+- **Prismbind:** combine the three foundational disciplines in a Guardian challenge, unlocked by their three Mastery Seeds.
+- **Mothchorus:** guide a shared moth choir Solo or Together on one screen, unlocked after defeating Prismbind.
 
-This candidate integrates **Mothchorus** as Tree 05 and the first advanced discipline of the Second Grove. The Choir Linden is visible but locked until the player defeats Prismbind and permanently awakens the Crownheart. Once unlocked, Solo and Together runs share the same rules, score ceiling, Best lane, Tree Total, growth, and Choir Seed proof. Profile v5 strictly migrates existing rc.7 progress in place, and the parent Grove validates every Mothchorus run lifecycle and result before applying it exactly once.
+Lumenloom, Bloomfold, and Ripplewake are available from the beginning. The five sleeping positions beyond Mothchorus are seeds with no playable game attached.
 
-The Choir Seed requires one completed chorus scoring at least 6,500 with at least 18 of 24 voices returned. The Seed remains independent of the three foundational Seeds and does not alter the First Grove Trial. The Choir Linden grows cumulatively at 6,500, 18,000, 36,000, 65,000, and 100,000 Tree Total. The same candidate also includes D-027 Thread Mercy: Lumenloom enemies require 2.5 seconds of continuous thread contact to fray a segment, extended to 2.9 seconds by Golden Fiber.
+## Controls
 
-This candidate makes the Mastery Grove itself answer the player without restoring continuous visual cost. Every tree now responds immediately to selection, exposes its next growth and skill reward, remembers completed trees for the current visit, and receives accepted scores through a save-first return ceremony with an exact total count-up. Strict personal bests, matched bests, and runs within 90% of the prior lane best receive honest outcome language. Completing all three foundational games in one visit awakens one decorative Grove Harmony. Four short locally synthesized tree voices are optional through a dedicated Grove sound control; reduced motion resolves the same information without score travel or motes. All new effects are discrete, capped, dependency-free, and return to rest.
+Each game explains its controls before play. Keyboard, mouse, and touch are supported.
 
-This hotfix guarantees a visible route back to the Grove from every embedded game. Grove-hosted games no longer expose child-only fullscreen, and the parent iframe no longer grants fullscreen permission that could cover the persistent Return rail. The Grove header now owns an isolated, clipped grid row above the iframe. Standalone and portal builds retain their own fullscreen capability.
+- Lumenloom: steer with keyboard or mouse and weave with Space or click. On a phone, use the floating thumb control and separate WEAVE/RELEASE button in portrait orientation.
+- Bloomfold: point, steer with the keyboard, or use touch.
+- Ripplewake: aim and time with mouse, keyboard, or touch; dragging is not required.
+- Prismbind: follow the current discipline's keyboard, mouse, or touch prompts.
+- Mothchorus: use the left and right pulse zones, or A/Left Arrow and D/Right Arrow. One player can use both sides; two players can share the screen.
 
-This hotfix addresses real-phone lag in the Mastery Grove selection screen. Mobile now uses a bounded canvas pixel budget and 24 FPS ambient scheduler, suspends decorative drawing during touch/scroll, hidden, modal, and active-game states, removes live mobile backdrop blur and animated grain, reduces paint-heavy effects, and skips offscreen card rendering. Desktop retains the full visual treatment. A dedicated performance contract prevents these budgets from regressing.
+Pause and sound controls are available in each game. The permanent Return control leads back to the Grove. The games respect reduced-motion preferences and offer their own accessibility options; assisted bests are recorded separately where applicable.
 
-This candidate completes Lumenloom's portrait-mobile release pass and Garden Awakening spectacle. It adds relative thumb steering, independent WEAVE/RELEASE input, compact mobile copy, reachable responsive geometry, portrait orientation handling, and automatic profile forwarding from Mastery Grove. The garden now carries five distinct night atmospheres, shape-backed target guidance, layered luminous thread and knots, persistent capped awakening marks, closure bloom waves, a responsive Hollow Guardian, and staged dawn. Mastery Grove also quiets its game bar during active play while preserving a clear 44px return control. Desktop and mobile share the same gameplay rules, scoring, progression, results, saves, and Grove protocol.
+## Grow your grove
 
-This repository now produces a small, allowlisted web release containing Mastery Grove, Lumenloom, Bloomfold, Ripplewake, Prismbind, and Mothchorus. Never distribute the workspace root; it also contains development videos, staging material, and unrelated Unity projects.
+Completed runs launched from the Grove add accepted scores to that tree's lifetime total. Seed, Bud, Bronze, Silver, Gold, and Full Bloom mark its growth; Everbloom rings continue beyond Full Bloom. Personal bests track a single run separately from accumulated growth.
 
-This D-025 candidate adds release-validation and public-trust infrastructure without changing gameplay or progression. The Grove exposes factual build, local-data, review-status, feedback, and user-initiated diagnostic information. Manual device and uncoached validation materials live under `release-validation/` and are intentionally excluded from the public payload. No analytics, automatic telemetry, ad SDK, account, or remote save service is introduced.
+Mastery Seeds reward the skill requirements shown in the Grove. The three foundational Seeds unlock Prismbind; its first victory awakens the Crownheart and unlocks Mothchorus. Mothchorus's Choir Seed requires a completed chorus with at least 6,500 points and 18 of 24 voices home.
 
-## Build and verify
+Complete one run in each foundational game to unlock the **Threefold Trial**: Lumenloom, Bloomfold, and Ripplewake played in sequence. The Trial uses Lumenloom's Standard Night Garden mode.
 
-Install Node.js 18 or newer, then run:
+## Keep your progress
 
-```text
-node tools/release.mjs release
-```
+Saves stay in this browser on this device. There are no accounts or automatic cloud saves. Launch from the Grove to grow its trees; standalone bests cannot reconstruct lifetime totals.
 
-The command syntax-checks every product and tooling script, runs every discovered `*.test.js`, checks HTML/CSS local references and duplicate IDs, clears only the workspace `dist` folder, copies the runtime allowlist, and writes SHA-256 evidence for every payload file to `dist/release-manifest.json` (the manifest does not hash itself).
+Use **Settings → Export progress backup** before clearing site data or moving browsers or devices. Settings also offers validated import and a reset with a second confirmation. Browser storage may be unavailable in some private sessions. See [Privacy and local data](PRIVACY.md) for backup contents, deletion, local Mothchorus history, and hosting details.
 
-Publish or zip the **contents of `dist`**. Its stable public entrypoint is `dist/index.html`; the canonical game hub remains `dist/MasteryGrove/index.html`.
+## Feedback and compatibility
 
-## Local play
+This is a web release. Physical iPhone, Android, and shared-iPad endurance sessions and uncoached-player validation remain incomplete; automated browser checks do not establish performance or usability on every device.
 
-Double-click **PLAY MASTERY GROVE.cmd**. It rebuilds the release and serves only `dist` at `http://127.0.0.1:4173/`, giving all five arcade games one predictable browser storage origin. Keep its terminal window open while playing.
+For a problem, open **Settings → Release information & support**, copy diagnostics, and use the [feedback form](https://github.com/FirstBloomGames/Mastery-Grove/issues/new/choose). Include what happened and the steps to repeat it. Public reports should not contain exported saves or personal information. You can also contact [firstbloomgames@gmail.com](mailto:firstbloomgames@gmail.com).
 
-Equivalent commands:
-
-```text
-node tools/release.mjs build
-node tools/static-server.mjs --open --port 4173
-```
-
-## Required review gates
-
-This is a release candidate, not a legal or store-submission approval. Before public distribution:
-
-- Replace the review placeholders in `PRIVACY.md` and `CREDITS.md` with owner-approved text.
-- Confirm the final rights holder, contact route, platform privacy behavior, and any SDK disclosures.
-- Perform an uncoached full-progression playtest from a clean profile on desktop and physical iPhone/Android hardware.
-- Validate the exact `dist` upload on the chosen portal, host, or mobile wrapper.
-- Produce platform-specific PNG icons, screenshots, signing credentials, and store metadata where required.
-
-## D-025 controlled web-beta evidence
-
-Use `release-validation/README.md` as the ordered owner/tester gate. A candidate is not promoted merely because automated checks pass: the exact public URL still needs clean-profile physical-device, uncoached comprehension/replay, save/recovery, and owner privacy/credits evidence. Only repeatable release blockers should expand the pre-beta code scope.
+[Credits](CREDITS.md) · [Privacy and local data](PRIVACY.md)

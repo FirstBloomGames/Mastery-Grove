@@ -115,6 +115,15 @@
     livingCarouselSeeds: $('livingCarouselSeeds'),
     livingCarouselHelpButton: $('livingCarouselHelpButton'),
     livingCarouselJournalButton: $('livingCarouselJournalButton'),
+    helpOverlay: $('helpOverlay'),
+    helpTitle: $('helpTitle'),
+    helpContextTitle: $('helpContextTitle'),
+    helpContextCopy: $('helpContextCopy'),
+    replayFirstBloomButton: $('replayFirstBloomButton'),
+    closeHelpButton: $('closeHelpButton'),
+    journalOverlay: $('journalOverlay'),
+    journalTitle: $('journalTitle'),
+    closeJournalButton: $('closeJournalButton'),
     livingCarouselStage: $('livingCarouselStage'),
     livingCarouselTreeVisual: $('livingCarouselTreeVisual'),
     livingCarouselTreeAuraRings: [...document.querySelectorAll('.living-carousel-tree-aura > i')],
@@ -348,6 +357,8 @@
   let storageRecovered = false;
   let storageCleanupIncomplete = false;
   let storageNotice = '';
+  let helpReturnFocus = null;
+  let journalReturnFocus = null;
   let profile;
   let carouselState = null;
   let carouselActive = false;
@@ -355,11 +366,14 @@
   let carouselPointer = null;
   let carouselSuppressClickUntil = 0;
   const carouselGamepadState = new Map();
+  const carouselConnectedGamepadIndexes = new Set();
+  let carouselNextGamepadPollAt = 0;
   let carouselLastGamepadMoveAt = 0;
   let releaseInfoReturnsToSettings = false;
   let pendingSave = null;
   let recoveryRequiresReload = false;
   let firstBloomState = null;
+  let firstBloomReplayReturnFocus = null;
   let firstBloomTickTimer = 0;
   let firstBloomLastTickAt = 0;
   let firstBloomPointerId = null;
@@ -374,6 +388,8 @@
   let activeGameId = null;
   let activeSession = null;
   let activeLumenloomState = null;
+  let announcementTimer = 0;
+  let carouselAnnouncementTimer = 0;
   let activeLumenloomModeId = null;
   let activeSessionId = null;
   let readyTimer = 0;
@@ -684,6 +700,7 @@
     if (!retryPayload && !options.allowNoRetry) return;
     recoveryRequiresReload = false;
     pendingSave = Object.freeze({
+      kind: options.pendingKind === 'result' ? 'result' : 'operation',
       retryPayload,
       resume: typeof resume === 'function' ? resume : null,
       label,
@@ -771,7 +788,8 @@
           returnLabel: options.returnLabel,
           onReturn: options.onReturn,
           pendingCopy: options.pendingCopy,
-          sessionProfile: options.sessionProfile
+          sessionProfile: options.sessionProfile,
+          pendingKind: options.pendingKind
         }
       );
       reflectStorageFailure(committed, options.label || 'Progress');
@@ -1245,11 +1263,15 @@
     if (revealGeneration !== firstBloomGeneration || !firstBloomRevealCommitted) return false;
     firstBloomRevealTimer = 0;
     if (document.hidden) return false;
+    const replayReturnFocus = firstBloomReplayReturnFocus;
+    firstBloomReplayReturnFocus = null;
     setOverlay(ui.firstBloomOverlay, false);
     stopFirstBloom();
     window.scrollTo(0, 0);
     if (ceremonyQueue.length) {
       showNextCeremony();
+    } else if (replayReturnFocus?.isConnected) {
+      window.setTimeout(() => replayReturnFocus.focus({ preventScroll: true }), 80);
     } else {
       focusGamePlayControl('lumenloom');
     }
@@ -1908,11 +1930,54 @@
     return true;
   }
 
+  function carouselHelpContent(entry, carouselView) {
+    if (!entry?.implemented) {
+      return { title: 'SLEEPING TREE', copy: 'Choose another tree or inspect this tree\'s Target.' };
+    }
+    if (entry.gameId !== 'lumenloom') {
+      return {
+        title: entry.title,
+        copy: `Choose Play to enter ${entry.title}. Its required controls remain visible inside the game.`
+      };
+    }
+    if (carouselView.modeId === 'standard') {
+      return {
+        title: 'NIGHT GARDEN',
+        copy: 'Seal loops through three nights, choose blessings, then bind the Hollow.'
+      };
+    }
+    if (carouselView.modeId === 'shiftingConstellation') {
+      return {
+        title: 'SHIFTING CONSTELLATION',
+        copy: 'Match clean loops to the displayed three-, four-, or five-flower target. Off-target loops still score.'
+      };
+    }
+    if (carouselView.modeId === 'hollowRush') {
+      return {
+        title: 'HOLLOW RUSH',
+        copy: 'Close three valid Guardian seals before time or petals expire.'
+      };
+    }
+    return {
+      title: 'PETAL RUSH',
+      copy: 'Seal loops for 90 seconds. Keep at least one petal.'
+    };
+  }
+
+  function boundedAnnouncement(message) {
+    return String(message ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
+  }
+
   function announceCarousel(message) {
     if (!ui.livingCarouselLive) return;
+    const bounded = boundedAnnouncement(message);
+    window.clearTimeout(carouselAnnouncementTimer);
+    carouselAnnouncementTimer = 0;
     ui.livingCarouselLive.textContent = '';
-    window.setTimeout(() => {
-      if (ui.livingCarouselLive) ui.livingCarouselLive.textContent = message;
+    if (!bounded) return;
+    carouselAnnouncementTimer = window.setTimeout(() => {
+      carouselAnnouncementTimer = 0;
+      if (ui.livingCarouselLive) ui.livingCarouselLive.textContent = bounded;
     }, 20);
   }
 
@@ -1940,6 +2005,11 @@
     ui.livingCarousel.hidden = false;
     ui.livingCarousel.inert = false;
     ui.livingCarousel.setAttribute('aria-hidden', 'false');
+    [ui.livingCarouselHelpButton, ui.livingCarouselJournalButton].forEach((button) => {
+      button.hidden = false;
+      button.inert = false;
+      button.removeAttribute('aria-hidden');
+    });
     ui.livingCarousel.dataset.carouselState = 'active';
     ui.groveScreen.dataset.carouselActive = 'true';
     [ui.legacyCatalogue, ui.sleepingGrove, ui.groveFooter]
@@ -2012,6 +2082,15 @@
         : `Standard-play best ${formatNumber(carouselView.best.standard)}`;
       ui.livingCarouselTarget.textContent = target;
       ui.livingCarouselTarget.title = carouselView.reward?.skillLabel || target;
+      const helpContent = carouselHelpContent(entry, carouselView);
+      ui.helpContextTitle.textContent = helpContent.title;
+      ui.helpContextCopy.textContent = helpContent.copy;
+      ui.livingCarouselHelpButton.setAttribute(
+        'aria-label',
+        entry.gameId === 'lumenloom'
+          ? `Open help for ${carouselView.modeName || 'Night Garden'} in Lumenloom`
+          : 'Open Grove and game controls help'
+      );
 
       const modeAvailable = lumenloomModes.MODE_IDS.filter(
         (modeId) => progression.isLumenloomModeAvailable(profile, modeId)
@@ -2314,6 +2393,10 @@
 
   function installLivingCarouselControls() {
     if (!ui.livingCarousel || !carousel || !carouselDependencies) return;
+    if (typeof navigator.getGamepads === 'function') {
+      for (const pad of navigator.getGamepads() || []) if (pad) carouselConnectedGamepadIndexes.add(pad.index);
+    }
+
 
     ui.livingCarousel.addEventListener('click', (event) => {
       if (Date.now() >= carouselSuppressClickUntil) return;
@@ -2386,9 +2469,14 @@
       carouselGamepadState.clear();
       return;
     }
+    if (!carouselConnectedGamepadIndexes.size || now < carouselNextGamepadPollAt) return;
+    carouselNextGamepadPollAt = now + 100;
     const pads = navigator.getGamepads() || [];
+    let connectedPadSeen = false;
     for (const pad of pads) {
       if (!pad) continue;
+      connectedPadSeen = true;
+      carouselConnectedGamepadIndexes.add(pad.index);
       const left = Boolean(pad.buttons?.[4]?.pressed || pad.buttons?.[14]?.pressed || pad.axes?.[0] < -.65);
       const right = Boolean(pad.buttons?.[5]?.pressed || pad.buttons?.[15]?.pressed || pad.axes?.[0] > .65);
       const previous = carouselGamepadState.get(pad.index) || { left: false, right: false };
@@ -2399,6 +2487,24 @@
       moveCarouselFromRoving(direction, { focus: false });
       break;
     }
+    if (!connectedPadSeen) {
+      carouselConnectedGamepadIndexes.clear();
+      carouselGamepadState.clear();
+    }
+  }
+
+  function handleCarouselGamepadConnected(event) {
+    const index = Number(event.gamepad?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    carouselConnectedGamepadIndexes.add(index);
+    carouselNextGamepadPollAt = 0;
+  }
+
+  function handleCarouselGamepadDisconnected(event) {
+    const index = Number(event.gamepad?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    carouselConnectedGamepadIndexes.delete(index);
+    carouselGamepadState.delete(index);
   }
 
   function updateProfileUI() {
@@ -2638,6 +2744,7 @@
     ui.gameFrame.title = `${game.title} inside the Mastery Grove`;
     const gameParams = new URLSearchParams({
       grove: '1',
+      v: RELEASE_VERSION,
       trial: trialSession?.active ? '1' : '0',
       session: activeSessionId
     });
@@ -2806,6 +2913,7 @@
       ? `${GAMES.lumenloom.title} ${activeLumenloomModeId} start`
       : `${GAMES.lumenloom.title} ${activeLumenloomModeId} result`;
     const recoveryOptions = Object.freeze({
+      pendingKind: transaction.kind,
       sessionProfile: transaction.beforeProfile,
       allowSessionEscape: isStart && !trialSession?.active,
       sessionEscapeLabel: 'PLAY WITHOUT SAVING',
@@ -2975,6 +3083,7 @@
       applied
     });
     const committed = commitProfile(proposed, {
+      pendingKind: 'result',
       label: `${game.title} result`,
       resume: () => finishRecordedResult(context)
     });
@@ -3474,8 +3583,15 @@
   }
 
   function announce(message) {
+    const bounded = boundedAnnouncement(message);
+    window.clearTimeout(announcementTimer);
+    announcementTimer = 0;
     ui.groveLive.textContent = '';
-    window.setTimeout(() => { ui.groveLive.textContent = message; }, 20);
+    if (!bounded) return;
+    announcementTimer = window.setTimeout(() => {
+      announcementTimer = 0;
+      ui.groveLive.textContent = bounded;
+    }, 20);
   }
 
   function buildReleaseDiagnostics() {
@@ -3553,6 +3669,53 @@
     }, 100);
   }
 
+  function openHelp() {
+    helpReturnFocus = document.activeElement?.focus
+      ? document.activeElement
+      : ui.livingCarouselHelpButton;
+    setOverlay(ui.helpOverlay, true);
+    const panel = ui.helpOverlay.querySelector('.utility-panel');
+    window.setTimeout(() => {
+      if (panel) panel.scrollTop = 0;
+      ui.helpTitle.focus({ preventScroll: true });
+    }, 80);
+  }
+
+  function closeHelp() {
+    setOverlay(ui.helpOverlay, false);
+    const returnFocus = helpReturnFocus || ui.livingCarouselHelpButton;
+    helpReturnFocus = null;
+    window.setTimeout(() => returnFocus?.focus?.({ preventScroll: true }), 80);
+  }
+
+  function replayFirstBloomFromHelp() {
+    if (firstBloomNeeded()) return;
+    const returnFocus = helpReturnFocus || ui.livingCarouselHelpButton;
+    helpReturnFocus = null;
+    setOverlay(ui.helpOverlay, false);
+    firstBloomReplayReturnFocus = returnFocus;
+    startFirstBloom({ focus: true });
+  }
+
+  function openJournal() {
+    journalReturnFocus = document.activeElement?.focus
+      ? document.activeElement
+      : ui.livingCarouselJournalButton;
+    setOverlay(ui.journalOverlay, true);
+    const panel = ui.journalOverlay.querySelector('.utility-panel');
+    window.setTimeout(() => {
+      if (panel) panel.scrollTop = 0;
+      ui.journalTitle.focus({ preventScroll: true });
+    }, 80);
+  }
+
+  function closeJournal() {
+    setOverlay(ui.journalOverlay, false);
+    const returnFocus = journalReturnFocus || ui.livingCarouselJournalButton;
+    journalReturnFocus = null;
+    window.setTimeout(() => returnFocus?.focus?.({ preventScroll: true }), 80);
+  }
+
   function showToast(message, duration = 2.3) {
     ui.groveToast.textContent = message;
     ui.groveToast.classList.add('is-visible');
@@ -3560,7 +3723,7 @@
   }
 
   function syncModalState() {
-    const overlays = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay];
+    const overlays = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.helpOverlay, ui.journalOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay];
     const topOverlay = overlays.find((overlay) => overlay.classList.contains('is-visible')) || null;
     const modalOpen = Boolean(topOverlay);
     overlays.forEach((overlay) => {
@@ -3586,7 +3749,7 @@
 
   function trapModalFocus(event) {
     if (event.key !== 'Tab') return false;
-    const overlay = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay]
+    const overlay = [ui.saveRecoveryOverlay, ui.firstBloomOverlay, ui.helpOverlay, ui.journalOverlay, ui.growthOverlay, ui.trialResultOverlay, ui.settingsOverlay, ui.releaseInfoOverlay, ui.returnConfirmOverlay]
       .find((candidate) => candidate.classList.contains('is-visible') && !candidate.inert);
     if (!overlay) return false;
     const focusable = [...overlay.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
@@ -3721,9 +3884,10 @@
 
   function drawStars() {
     ctx.save();
+    ctx.fillStyle = '#ebebff';
     for (const star of rendererState.stars) {
       const alpha = .2 + .32 * (.5 + .5 * Math.sin(view.time * .6 + star.phase));
-      ctx.fillStyle = `rgba(235,235,255,${alpha})`;
+      ctx.globalAlpha = alpha;
       ctx.beginPath();
       ctx.arc(star.x, star.y, star.size, 0, TAU);
       ctx.fill();
@@ -4187,8 +4351,8 @@
     rendererFrameId = 0;
     const elapsed = Math.min(.25, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
-    pollLivingCarouselGamepads(now);
-    if (!document.hidden && !activeGameId) tickGrowthTransfer(now);
+    if (carouselConnectedGamepadIndexes.size) pollLivingCarouselGamepads(now);
+    if (!document.hidden && !activeGameId && activeGrowthTransfer?.state.status === 'running') tickGrowthTransfer(now);
     const modalOpen = document.body.classList.contains('modal-open');
     const interactionPaused = view.mobileRenderer && now < rendererState.interactionQuietUntil;
     const animationPaused = activeGameId || document.hidden || interactionPaused
@@ -4340,6 +4504,11 @@
   ui.releaseInfoButton.addEventListener('click', openReleaseInformation);
   ui.copyDiagnosticsButton.addEventListener('click', copyReleaseDiagnostics);
   ui.closeReleaseInfoButton.addEventListener('click', closeReleaseInformation);
+  ui.livingCarouselHelpButton.addEventListener('click', openHelp);
+  ui.closeHelpButton.addEventListener('click', closeHelp);
+  ui.replayFirstBloomButton.addEventListener('click', replayFirstBloomFromHelp);
+  ui.livingCarouselJournalButton.addEventListener('click', openJournal);
+  ui.closeJournalButton.addEventListener('click', closeJournal);
 
   window.addEventListener('message', (event) => {
     if (activeLumenloomState) {
@@ -4355,6 +4524,10 @@
     if (event.key === 'Escape' && ui.saveRecoveryOverlay.classList.contains('is-visible')) {
       event.preventDefault();
       ui.pendingRetryButton.focus({ preventScroll: true });
+    } else if (event.key === 'Escape' && ui.helpOverlay.classList.contains('is-visible')) {
+      closeHelp();
+    } else if (event.key === 'Escape' && ui.journalOverlay.classList.contains('is-visible')) {
+      closeJournal();
     } else if (event.key === 'Escape' && ui.releaseInfoOverlay.classList.contains('is-visible')) {
       closeReleaseInformation();
     } else if (event.key === 'Escape' && ui.settingsOverlay.classList.contains('is-visible')) {
@@ -4365,8 +4538,11 @@
   });
 
   window.addEventListener('resize', queueCanvasResize, { passive: true });
+  window.addEventListener('gamepadconnected', handleCarouselGamepadConnected);
+  window.addEventListener('gamepaddisconnected', handleCarouselGamepadDisconnected);
   window.addEventListener('beforeunload', (event) => {
-    if (!pendingSave) return;
+    const pendingResult = pendingSave?.kind === 'result' || activeLumenloomState?.pending?.kind === 'result';
+    if (!pendingResult) return;
     event.preventDefault();
     event.returnValue = '';
   });

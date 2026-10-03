@@ -5,6 +5,8 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
   const TAU = Math.PI * 2;
+  const MOBILE_GAMEPLAY_DPR_CAP = 1.5;
+  const DESKTOP_GAMEPLAY_DPR_CAP = 2;
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let reducedMotion = motionQuery.matches;
   const pageParams = new URLSearchParams(window.location.search);
@@ -29,11 +31,11 @@
   const selectedMode = modeRules.getMode(selectedModeId);
   if (!selectedMode) throw new Error('The canonical Lumenloom mode is unavailable.');
   const isPetalRush = selectedModeId === 'petalRush';
-  // The first Quick Bloom is live. Later remixes remain fail-closed until their
-  // own runtime and proof paths are release-gated.
-  if (!['standard', 'petalRush'].includes(selectedModeId)) {
-    throw new Error('This Lumenloom arcade mode is not enabled in the current runtime.');
-  }
+  const isShiftingConstellation = selectedModeId === 'shiftingConstellation';
+  const isHollowRush = selectedModeId === 'hollowRush';
+  const isArcadeMode = selectedModeId !== 'standard';
+  const isTimedArcadeMode = isPetalRush || isShiftingConstellation;
+  const CONSTELLATION_SYMBOLS = Object.freeze(['\u25B3', '\u25C7', '\u2B20']);
   const isTrialRun = isGroveHosted && groveContext.trial;
   const sessionId = isGroveHosted ? groveContext.sessionId : '';
   const messageTargetOrigin = window.location.protocol === 'file:' ? '*' : window.location.origin;
@@ -46,6 +48,7 @@
     scoreValue: $('scoreValue'),
     bestValue: $('bestValue'),
     objectiveKicker: $('objectiveKicker'),
+    objectiveCard: $('objectiveCard'),
     objectiveText: $('objectiveText'),
     objectiveProgress: $('objectiveProgress'),
     objectiveFill: $('objectiveFill'),
@@ -164,6 +167,7 @@
   let H = 720;
   let DPR = 1;
   let lastFrame = performance.now();
+  let animationFrameId = 0;
   let nextId = 1;
   let gameplayRandomSource = mulberry32(Date.now() >>> 0);
   let cosmeticRandomSource = mulberry32((Date.now() ^ 0x9E3779B9) >>> 0);
@@ -200,6 +204,13 @@
     // only opts in automatically when its viewport is tablet-sized or smaller.
     const mobileDevice = coarsePointer || (touchPoints > 0 && (width <= 1024 || height <= 600));
     return mobileDevice ? 'mobile-portrait' : 'desktop';
+  }
+
+  function resolveGameplayDpr(profile) {
+    const cap = profile === 'mobile-portrait'
+      ? MOBILE_GAMEPLAY_DPR_CAP
+      : DESKTOP_GAMEPLAY_DPR_CAP;
+    return Math.min(cap, window.devicePixelRatio || 1);
   }
 
   function calculatePlayBounds(width, height, profile) {
@@ -462,6 +473,10 @@
     totalVertices: 0,
     cleanLoops: 0,
     chainLinks: 0,
+    targetIndex: 0,
+    targetClockMs: 0,
+    targetMatches: 0,
+    seals: 0,
     arcadeClockMs: 0,
     arcadeElapsedMs: 0,
     arcadeReplacementQueue: [],
@@ -870,7 +885,7 @@
       centerX: W / 2,
       centerY: (Math.max(playBounds.top, top) + Math.min(playBounds.bottom, H - bottomInset)) / 2
     };
-    if (!isPetalRush) return bounds;
+    if (!isArcadeMode) return bounds;
 
     const compactWidth = Math.min(bounds.width, Math.max(620, W * 0.64));
     const left = bounds.centerX - compactWidth / 2;
@@ -911,17 +926,17 @@
     const oldW = W;
     const oldH = H;
     const oldBounds = { ...playBounds };
-    const rect = canvas.getBoundingClientRect();
-    W = Math.max(320, rect.width);
-    H = Math.max(240, rect.height);
+    // The canvas is CSS-sized to the iframe viewport. Reading its own rect after
+    // assigning an inline pixel size makes that previous size self-perpetuating
+    // across rotation, so viewport dimensions are the authoritative source.
+    W = Math.max(320, window.innerWidth || 0);
+    H = Math.max(240, window.innerHeight || 0);
     controlProfile = currentDeviceProfile(W, H);
     playBounds = calculatePlayBounds(W, H, controlProfile);
     setProfileDomState();
-    DPR = Math.min(2, window.devicePixelRatio || 1);
+    DPR = resolveGameplayDpr(controlProfile);
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
-    canvas.style.width = `${W}px`;
-    canvas.style.height = `${H}px`;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
     if (oldW && oldH && state.mode !== 'title') {
@@ -1045,6 +1060,10 @@
     state.cleanLoops = 0;
     state.chainLinks = 0;
     state.arcadeClockMs = 0;
+    state.targetIndex = 0;
+    state.targetClockMs = 0;
+    state.targetMatches = 0;
+    state.seals = 0;
     state.arcadeElapsedMs = 0;
     state.arcadeReplacementQueue = [];
     state.shake = 0;
@@ -1061,17 +1080,19 @@
     ui.quitButton.disabled = false;
     ui.pauseRestartButton.disabled = isTrialRun;
     closeDialogs(canvas);
-    if (isPetalRush) beginPetalRush();
+    if (isArcadeMode) beginArcadeMode();
     else beginPhase(0);
+    lastFrame = performance.now();
+    scheduleFrame();
   }
 
-  function beginPetalRush() {
-    state.phaseIndex = 1;
+  function beginArcadeMode() {
+    state.phaseIndex = isHollowRush ? 4 : isShiftingConstellation ? 3 : 1;
     state.phaseProgress = 0;
-    state.phaseTarget = selectedMode.durationMs;
+    state.phaseTarget = isHollowRush ? selectedMode.requiredSeals : selectedMode.durationMs;
     state.phaseTime = selectedMode.durationMs / 1000;
     state.anchors = generateAnchors(selectedMode.flowerCount, false);
-    replenishPetalRushFlowers([]);
+    replenishArcadeFlowers([]);
     state.enemies = [];
     state.chain = [];
     state.frayTimer = 0;
@@ -1085,8 +1106,14 @@
     state.mode = 'playing';
     ui.phaseBanner.classList.remove('is-visible');
     state.phaseIntroTimer = 0;
-    maintainPetalRushThreatFloor(true);
-    showToast('Close bright loops. Keep one petal for 90 seconds.', false, 2.6);
+    maintainArcadeThreatFloor(true);
+    if (isHollowRush) spawnEnemy('boss', true);
+    const entryCue = isPetalRush
+      ? 'Close bright loops. Keep one petal for 90 seconds.'
+      : isShiftingConstellation
+        ? 'Match the glowing shape. Keep weaving for two minutes.'
+        : 'Enclose the Guardian three times before the Hollow closes.';
+    showToast(entryCue, false, 2.6);
     updateObjective();
     updateHud();
   }
@@ -1235,7 +1262,7 @@
 
   const PETAL_THREAT_TYPES = Object.freeze(['drifter', 'seeker', 'rusher']);
 
-  function petalRushThreatMinimum(elapsedMs = state.arcadeElapsedMs) {
+  function arcadeThreatMinimum(elapsedMs = state.arcadeElapsedMs) {
     let minimum = selectedMode.threat.stages[0].minimum;
     for (const stage of selectedMode.threat.stages) {
       if (elapsedMs < stage.atMs) break;
@@ -1244,8 +1271,8 @@
     return minimum;
   }
 
-  function maintainPetalRushThreatFloor(initial = false) {
-    if (!isPetalRush || state.mode !== 'playing') return;
+  function maintainArcadeThreatFloor(initial = false) {
+    if (!isArcadeMode || state.mode !== 'playing') return;
     const ready = [];
     const waiting = [];
     for (const replacement of state.arcadeReplacementQueue) {
@@ -1256,7 +1283,7 @@
       spawnEnemy(replacement.type, false, replacement.type);
     }
 
-    const minimum = petalRushThreatMinimum();
+    const minimum = arcadeThreatMinimum();
     for (const type of PETAL_THREAT_TYPES) {
       const active = state.enemies.filter((enemy) => (
         !enemy.dead && enemy.rosterSlot === type
@@ -1269,8 +1296,8 @@
     }
   }
 
-  function schedulePetalRushReplacement(enemy) {
-    if (!isPetalRush || !PETAL_THREAT_TYPES.includes(enemy?.rosterSlot)) return;
+  function scheduleArcadeReplacement(enemy) {
+    if (!isArcadeMode || !PETAL_THREAT_TYPES.includes(enemy?.rosterSlot)) return;
     state.arcadeReplacementQueue.push({
       type: enemy.rosterSlot,
       readyAtMs: state.arcadeElapsedMs + selectedMode.threat.replacementDelayMs
@@ -1342,8 +1369,8 @@
   }
 
   function updatePlaying(dt) {
-    if (isPetalRush) {
-      updatePetalRush(dt);
+    if (isArcadeMode) {
+      updateArcadeMode(dt);
       return;
     }
     const def = phaseDefs[state.phaseIndex];
@@ -1365,31 +1392,53 @@
     }
   }
 
-  function advancePetalRushClock(deltaMs) {
-    if (!isPetalRush || state.mode !== 'playing') return false;
+  function cycleConstellationTarget(matched = false) {
+    if (!isShiftingConstellation) return;
+    state.targetIndex = (state.targetIndex + 1) % selectedMode.targetVertices.length;
+    state.targetClockMs = 0;
+    if (matched) {
+      const count = selectedMode.targetVertices[state.targetIndex];
+      showToast(`${CONSTELLATION_SYMBOLS[state.targetIndex]} ${count} FLOWERS`, false, 1.25);
+    }
+  }
+
+  function advanceConstellationClock(deltaMs) {
+    if (!isShiftingConstellation || state.mode !== 'playing') return;
+    state.targetClockMs += Math.max(0, deltaMs);
+    while (state.targetClockMs >= selectedMode.targetWindowMs) {
+      state.targetClockMs -= selectedMode.targetWindowMs;
+      state.targetIndex = (state.targetIndex + 1) % selectedMode.targetVertices.length;
+    }
+  }
+
+  function advanceArcadeClock(deltaMs) {
+    if (!isArcadeMode || state.mode !== 'playing') return false;
     const durationMs = selectedMode.durationMs;
-    state.arcadeClockMs = Math.min(durationMs, state.arcadeClockMs + Math.max(0, deltaMs));
+    const safeDelta = Math.max(0, deltaMs);
+    advanceConstellationClock(Math.min(safeDelta, durationMs - state.arcadeClockMs));
+    state.arcadeClockMs = Math.min(durationMs, state.arcadeClockMs + safeDelta);
     state.arcadeElapsedMs = state.arcadeClockMs >= durationMs
       ? durationMs
       : Math.min(durationMs - 1, Math.floor(state.arcadeClockMs));
     state.phaseTime = Math.max(0, (durationMs - state.arcadeClockMs) / 1000);
-    state.phaseProgress = state.arcadeElapsedMs;
+    state.phaseProgress = isHollowRush ? state.seals : state.arcadeElapsedMs;
     if (state.arcadeClockMs < durationMs) return false;
 
-    // D-029 resolves the survival timer before any collision on the final tick.
+    // D-029 resolves the timer before any collision or closure on the final tick.
     state.arcadeElapsedMs = durationMs;
-    state.phaseProgress = durationMs;
+    state.phaseProgress = isHollowRush ? state.seals : durationMs;
     state.phaseTime = 0;
-    finishRun(true);
+    finishRun(isTimedArcadeMode);
     return true;
   }
 
-  function updatePetalRush(dt) {
-    if (advancePetalRushClock(dt * 1000)) return;
+  function updateArcadeMode(dt) {
+    if (advanceArcadeClock(dt * 1000)) return;
     updatePlayer(dt);
     updateAnchors(dt);
     updateWeave(dt);
-    maintainPetalRushThreatFloor(false);
+    if (state.mode !== 'playing') return;
+    maintainArcadeThreatFloor(false);
     updateEnemies(dt, true);
   }
 
@@ -1545,8 +1594,8 @@
       audio.tone(146.83, 0.22, 0.03, 'square');
       return;
     }
-    if (isPetalRush && state.chain.length >= selectedMode.loop.maximumVertices) {
-      showToast('Eight flowers is the widest Quick Bloom.', false, 1.6);
+    if (isArcadeMode && state.chain.length >= selectedMode.loop.maximumVertices) {
+      showToast(`${selectedMode.loop.maximumVertices} flowers is the widest ${selectedMode.name} weave.`, false, 1.6);
       return;
     }
     state.chain.push(anchor.id);
@@ -1578,16 +1627,13 @@
     sealWeave(polygon);
   }
 
-  function petalRushScore() {
+  function arcadeBaseScore() {
     const scoring = selectedMode.scoring;
-    return state.loops * scoring.loops
-      + state.totalVertices * scoring.totalVertices
-      + state.shadows * scoring.shadows
-      + state.cleanLoops * scoring.cleanLoops
-      + state.chainLinks * scoring.chainLinks;
+    return ['loops', 'totalVertices', 'shadows', 'cleanLoops', 'chainLinks', 'targetMatches', 'seals']
+      .reduce((total, key) => total + state[key] * (Number(scoring[key]) || 0), 0);
   }
 
-  function creditPetalRushLoop(vertices, shadows, clean) {
+  function creditArcadeLoop(vertices, shadows, clean, guardianSeal = false) {
     const loop = selectedMode.loop;
     if (!Number.isSafeInteger(vertices)
       || vertices < loop.minimumVertices
@@ -1596,30 +1642,59 @@
       || shadows < 0
       || shadows > loop.maximumShadows
       || typeof clean !== 'boolean'
+      || typeof guardianSeal !== 'boolean'
       || state.loops >= loop.maximumLoops) {
-      return Object.freeze({ credited: false, awarded: 0, chain: false });
+      return Object.freeze({
+        credited: false,
+        awarded: 0,
+        chain: false,
+        targetMatch: false,
+        matchedTarget: null,
+        seal: false
+      });
     }
 
     const previousScore = state.score;
     const chain = state.lastArcadeLoopAtMs >= 0
       && state.arcadeElapsedMs - state.lastArcadeLoopAtMs <= loop.chainWindowMs;
+    const matchedTarget = isShiftingConstellation
+      ? selectedMode.targetVertices[state.targetIndex]
+      : null;
+    const targetMatch = isShiftingConstellation
+      && clean
+      && vertices === matchedTarget;
+    const seal = isHollowRush
+      && guardianSeal
+      && state.seals < selectedMode.requiredSeals;
+
     state.loops++;
     state.totalVertices += vertices;
     state.shadows += shadows;
     if (clean) state.cleanLoops++;
     if (chain) state.chainLinks++;
+    if (targetMatch) {
+      state.targetMatches++;
+      cycleConstellationTarget(true);
+    }
+    if (seal) {
+      state.seals++;
+      state.phaseProgress = state.seals;
+    }
     state.lastArcadeLoopAtMs = state.arcadeElapsedMs;
     state.lastLoopAt = state.runTime;
     state.comboStack = chain ? Math.min(6, state.comboStack + 1) : 0;
-    state.score = petalRushScore();
+    state.score = arcadeBaseScore();
     return Object.freeze({
       credited: true,
       awarded: state.score - previousScore,
-      chain
+      chain,
+      targetMatch,
+      matchedTarget,
+      seal
     });
   }
 
-  function replenishPetalRushFlowers(usedIds) {
+  function replenishArcadeFlowers(usedIds) {
     const used = new Set(usedIds);
     const anchors = state.anchors.filter((anchor) => !used.has(anchor.id));
     const bounds = getAnchorPlacementBounds();
@@ -1654,14 +1729,33 @@
     state.anchors = anchors.slice(0, selectedMode.flowerCount);
   }
 
-  function sealPetalRushWeave(polygon) {
+  function releaseHollowSealThreats() {
+    if (!isHollowRush || !selectedMode.threat.sealRelease.afterSeals.includes(state.seals)) return;
+    const cap = selectedMode.threat.sealRelease.nonGuardianCap;
+    for (const type of ['drifter', 'seeker']) {
+      const active = state.enemies.filter((enemy) => !enemy.dead && enemy.type !== 'boss').length;
+      const futurePopulation = active + state.arcadeReplacementQueue.length;
+      if (futurePopulation >= cap) break;
+      spawnEnemy(type, false);
+    }
+  }
+
+  function sealArcadeWeave(polygon) {
     const usedIds = [...state.chain];
+    const guardian = isHollowRush
+      ? state.enemies.find((enemy) => (
+        !enemy.dead
+        && enemy.type === 'boss'
+        && enemy.invulnerable <= 0
+        && pointInPolygon(enemy, polygon)
+      ))
+      : null;
     const caught = [];
     for (const enemy of state.enemies) {
       if (enemy.dead || enemy.type === 'boss' || !pointInPolygon(enemy, polygon)) continue;
       enemy.dead = true;
       caught.push(enemy);
-      schedulePetalRushReplacement(enemy);
+      scheduleArcadeReplacement(enemy);
       state.wildBlooms.push({
         x: enemy.x,
         y: enemy.y,
@@ -1679,7 +1773,36 @@
     }
 
     const scoredShadows = Math.min(caught.length, selectedMode.loop.maximumShadows);
-    const result = creditPetalRushLoop(polygon.length, scoredShadows, state.cleanWeave);
+    const result = creditArcadeLoop(
+      polygon.length,
+      scoredShadows,
+      state.cleanWeave,
+      Boolean(guardian)
+    );
+    if (result.seal && guardian) {
+      guardian.hp = Math.max(0, selectedMode.requiredSeals - state.seals);
+      guardian.invulnerable = state.seals < selectedMode.requiredSeals ? 2.35 : 0;
+      guardian.dead = state.seals >= selectedMode.requiredSeals;
+      state.wildBlooms.push({
+        x: guardian.x,
+        y: guardian.y,
+        hue: 44 + guardian.hp * 48,
+        size: 2.1,
+        age: 0
+      });
+      burst(guardian.x, guardian.y, '#ffd977', 48, 260);
+      burst(guardian.x, guardian.y, '#73e8d2', 28, 210);
+      addFloater(
+        guardian.x,
+        guardian.y - 75,
+        state.seals < selectedMode.requiredSeals
+          ? `GUARDIAN SEAL ${state.seals} / ${selectedMode.requiredSeals}`
+          : 'THE GUARDIAN OPENS',
+        '#ffd977',
+        1.35
+      );
+      releaseHollowSealThreats();
+    }
     for (const id of usedIds) {
       const anchor = anchorById(id);
       if (!anchor) continue;
@@ -1712,33 +1835,49 @@
     addFloater(center.x, center.y, label, scoredShadows >= 3 ? '#ffd977' : '#fff8da', 1.15);
     if (result.credited && state.cleanWeave) {
       window.setTimeout(() => {
-        if (state.mode === 'playing') addFloater(center.x, center.y + 22, 'CLEAN LOOP +100', '#73e8d2', 0.9);
+        if (state.mode === 'playing') addFloater(center.x, center.y + 22, `CLEAN LOOP +${selectedMode.scoring.cleanLoops}`, '#73e8d2', 0.9);
       }, 120);
     }
     if (result.chain) {
       window.setTimeout(() => {
-        if (state.mode === 'playing') addFloater(center.x, center.y + 43, 'QUICK CHAIN +150', '#ffd977', 0.9);
+        if (state.mode === 'playing') addFloater(center.x, center.y + 43, `QUICK CHAIN +${selectedMode.scoring.chainLinks}`, '#ffd977', 0.9);
       }, 170);
+    }
+    if (result.targetMatch) {
+      window.setTimeout(() => {
+        if (state.mode === 'playing') {
+          const matchedIndex = selectedMode.targetVertices.indexOf(result.matchedTarget);
+          addFloater(
+            center.x,
+            center.y + 64,
+            `${CONSTELLATION_SYMBOLS[matchedIndex]} MATCH +${selectedMode.scoring.targetMatches}`,
+            '#d6a7ff',
+            1
+          );
+        }
+      }, 210);
     }
     if (caught.length > scoredShadows) {
       showToast('Three shadows scored. Every captured shade still blooms.', false, 1.9);
     }
 
-    audio.close(caught.length, state.cleanWeave);
-    mobileHaptic(caught.length >= 3 ? [12, 18, 18] : [9, 18, 14]);
+    audio.close(caught.length + (result.seal ? 3 : 0), state.cleanWeave);
+    mobileHaptic(result.seal ? [16, 24, 28] : caught.length >= 3 ? [12, 18, 18] : [9, 18, 14]);
     burst(center.x, center.y, '#ffd977', 18 + caught.length * 5, 190);
-    state.shake = reducedMotion ? 0 : Math.min(12, 3 + caught.length * 2.2);
-    state.flash = Math.min(0.42, 0.1 + caught.length * 0.04);
+    state.shake = reducedMotion ? 0 : Math.min(15, 3 + caught.length * 2.2 + (result.seal ? 5 : 0));
+    state.flash = Math.min(0.7, 0.1 + caught.length * 0.04 + (result.seal ? 0.25 : 0));
     state.enemies = state.enemies.filter((enemy) => !enemy.dead);
     clearWeave();
-    replenishPetalRushFlowers(usedIds);
-    maintainPetalRushThreatFloor(false);
+    replenishArcadeFlowers(usedIds);
+    maintainArcadeThreatFloor(false);
     updateObjective();
+
+    if (result.seal && state.seals >= selectedMode.requiredSeals) finishRun(true);
   }
 
   function sealWeave(polygon) {
-    if (isPetalRush) {
-      sealPetalRushWeave(polygon);
+    if (isArcadeMode) {
+      sealArcadeWeave(polygon);
       return;
     }
     const now = state.runTime;
@@ -2260,14 +2399,14 @@
   }
 
   function buildRunProof() {
-    if (!isPetalRush) {
+    if (!isArcadeMode) {
       return {
         loops: state.loops,
         shadows: state.shadows,
         phase: state.phaseIndex
       };
     }
-    return {
+    const proof = {
       loops: state.loops,
       totalVertices: state.totalVertices,
       shadows: state.shadows,
@@ -2276,35 +2415,55 @@
       elapsedMs: state.arcadeElapsedMs,
       petals: Math.max(0, state.lives)
     };
+    if (isShiftingConstellation) proof.targetMatches = state.targetMatches;
+    if (isHollowRush) {
+      proof.seals = state.seals;
+      proof.remainingMs = Math.max(0, selectedMode.durationMs - state.arcadeElapsedMs);
+      proof.baseScore = arcadeBaseScore();
+    }
+    return proof;
   }
 
   function finishRun(victory) {
     if (state.mode === 'result') return;
-    if (isPetalRush) {
-      if (victory) {
-        state.arcadeClockMs = selectedMode.durationMs;
-        state.arcadeElapsedMs = selectedMode.durationMs;
-        state.phaseTime = 0;
-        state.lives = Math.max(1, state.lives);
+    if (isArcadeMode) {
+      if (isTimedArcadeMode) {
+        if (victory) {
+          state.arcadeClockMs = selectedMode.durationMs;
+          state.arcadeElapsedMs = selectedMode.durationMs;
+          state.phaseTime = 0;
+          state.lives = Math.max(1, state.lives);
+        } else {
+          state.arcadeClockMs = Math.min(state.arcadeClockMs, selectedMode.durationMs - 1);
+          state.arcadeElapsedMs = Math.min(
+            selectedMode.durationMs - 1,
+            Math.max(0, Math.floor(state.arcadeClockMs))
+          );
+          state.lives = 0;
+        }
       } else {
-        state.arcadeClockMs = Math.min(state.arcadeClockMs, selectedMode.durationMs - 1);
-        state.arcadeElapsedMs = Math.min(
-          selectedMode.durationMs - 1,
-          Math.max(0, Math.floor(state.arcadeClockMs))
-        );
-        state.lives = 0;
+        state.arcadeClockMs = Math.min(selectedMode.durationMs, Math.max(0, state.arcadeClockMs));
+        state.arcadeElapsedMs = state.arcadeClockMs >= selectedMode.durationMs
+          ? selectedMode.durationMs
+          : Math.min(selectedMode.durationMs - 1, Math.max(0, Math.floor(state.arcadeClockMs)));
+        state.phaseTime = Math.max(0, (selectedMode.durationMs - state.arcadeClockMs) / 1000);
+        if (victory) {
+          state.seals = selectedMode.requiredSeals;
+          state.phaseProgress = state.seals;
+          state.lives = Math.max(1, state.lives);
+        }
       }
-      state.score = petalRushScore();
+      state.score = arcadeBaseScore();
     }
     state.completed = victory;
     state.mode = 'result';
     clearWeave();
     const proof = buildRunProof();
-    const verifiedRemixScore = isPetalRush
+    const verifiedRemixScore = isArcadeMode
       ? modeRules.recomputeResult(selectedModeId, proof, Boolean(victory))
       : null;
-    const proofValid = !isPetalRush || Number.isSafeInteger(verifiedRemixScore);
-    const roundedScore = isPetalRush && proofValid
+    const proofValid = !isArcadeMode || Number.isSafeInteger(verifiedRemixScore);
+    const roundedScore = isArcadeMode && proofValid
       ? verifiedRemixScore
       : Math.round(state.score);
     state.score = roundedScore;
@@ -2335,13 +2494,21 @@
       ? victory
         ? 'Ninety seconds. Still glowing.'
         : 'One more bright loop.'
-      : victory
-        ? 'The garden wakes.'
-        : 'The night was deep.';
+      : isShiftingConstellation
+        ? victory
+          ? 'The constellation holds.'
+          : 'The stars will turn again.'
+        : isHollowRush
+          ? victory
+            ? 'The Guardian opens.'
+            : 'The Hollow keeps its crown.'
+          : victory
+            ? 'The garden wakes.'
+            : 'The night was deep.';
     ui.resultCopy.textContent = isGroveHosted
       ? completionPublished
-        ? isPetalRush
-          ? 'Your exact Quick Bloom proof is waiting for the Grove to take root.'
+        ? isArcadeMode
+          ? `Your exact ${selectedMode.name} proof is waiting for the Grove to take root.`
           : 'Your exact run is waiting for the Grove to confirm its roots.'
         : proofValid
           ? 'The run could not be sent safely. Return to the Grove and try again.'
@@ -2361,7 +2528,7 @@
       if (!proofValid) {
         ui.replayButton.disabled = isTrialRun;
         ui.homeButton.disabled = false;
-        ui.replayButton.setAttribute('aria-label', 'Restart Petal Rush');
+        ui.replayButton.setAttribute('aria-label', `Restart ${selectedMode.name}`);
       }
       ui.replayButton.querySelector('span').textContent = 'SAVING…';
       if (isTrialRun) {
@@ -2385,8 +2552,8 @@
       ? 'The Grove is holding this exact score safely. Use its Retry Save choice before leaving.'
       : saved
         ? state.completed
-          ? isPetalRush
-            ? 'The Grove confirmed every second and every point before showing them.'
+          ? isArcadeMode
+            ? `The Grove confirmed every ${selectedMode.name} point before showing it.`
             : 'The Grove confirmed this dawn before showing it.'
           : 'The Grove confirmed every point that took root.'
         : 'You can see this run, but it did not change Best, Tree Total, growth, or unlocks.';
@@ -2396,15 +2563,15 @@
     ui.homeButton.disabled = pending;
     ui.replayButton.querySelector('span').textContent = isTrialRun
       ? 'TRIAL RUN COMPLETE · CONTINUE IN THE GROVE'
-      : isPetalRush
-        ? 'PLAY PETAL RUSH AGAIN'
+      : isArcadeMode
+        ? `PLAY ${selectedMode.name.toUpperCase()} AGAIN`
         : 'WEAVE ANOTHER NIGHT';
     if (isTrialRun) {
       ui.replayButton.querySelector('i')?.setAttribute('hidden', '');
       ui.replayButton.setAttribute('aria-label', 'Trial run complete. Continue in the Grove.');
     } else {
       ui.replayButton.querySelector('i')?.removeAttribute('hidden');
-      ui.replayButton.setAttribute('aria-label', isPetalRush ? 'Play Petal Rush again' : 'Weave another night');
+      ui.replayButton.setAttribute('aria-label', isArcadeMode ? `Play ${selectedMode.name} again` : 'Weave another night');
     }
     if (!pending) {
       window.setTimeout(() => (isTrialRun ? ui.homeButton : ui.replayButton).focus({ preventScroll: true }), 60);
@@ -2420,6 +2587,21 @@
       if (score >= 3500) return 'BLOOM RUNNER';
       return 'FIRST SPARK';
     }
+    if (isShiftingConstellation) {
+      if (victory && score >= 60000) return 'STARLOOM MASTER';
+      if (victory && score >= 25000) return 'WILD ORBIT';
+      if (victory) return 'CONSTELLATION KEEPER';
+      if (score >= 12000) return 'SHAPE WEAVER';
+      if (score >= 4500) return 'STAR FINDER';
+      return 'FIRST ORBIT';
+    }
+    if (isHollowRush) {
+      if (victory && score >= 30000) return 'CROWNWEAVER';
+      if (victory) return 'GUARDIAN BINDER';
+      if (state.seals >= 2) return 'SECOND SEAL';
+      if (state.seals >= 1) return 'FIRST SEAL';
+      return 'HOLLOW WALKER';
+    }
     if (victory && score >= 14000) return 'DAWN ARCHITECT';
     if (victory && score >= 9500) return 'MOONLOOM MASTER';
     if (victory) return 'NIGHT WEAVER';
@@ -2434,12 +2616,15 @@
     ui.hud.classList.add('is-hidden');
     ui.startBest.textContent = `PERSONAL BEST · ${formatNumber(state.best)}`;
     openDialog(ui.startOverlay, ui.playButton);
+    lastFrame = performance.now();
+    scheduleFrame();
   }
 
   function pauseGame() {
     if (state.mode !== 'playing' && state.mode !== 'transition') return;
     state.previousMode = state.mode;
     state.mode = 'paused';
+    stopFrameLoop();
     audio.suspend();
     openDialog(ui.pauseOverlay, ui.resumeButton);
   }
@@ -2447,13 +2632,35 @@
   function resumeGame() {
     if (state.mode !== 'paused') return;
     state.mode = state.previousMode || 'playing';
+    lastFrame = performance.now();
     audio.init();
     closeDialogs(canvas);
+    scheduleFrame();
   }
 
   function updateObjective() {
-    if (isPetalRush) {
+    if (isArcadeMode) {
       const remainingSeconds = Math.max(0, Math.ceil((selectedMode.durationMs - state.arcadeClockMs) / 1000));
+      if (isShiftingConstellation) {
+        const target = selectedMode.targetVertices[state.targetIndex];
+        const symbol = CONSTELLATION_SYMBOLS[state.targetIndex];
+        ui.objectiveKicker.textContent = `WILD BLOOM / ${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+        ui.objectiveText.textContent = `${symbol} ${target}`;
+        ui.objectiveProgress.textContent = `${state.targetMatches} MATCH${state.targetMatches === 1 ? '' : 'ES'}`;
+        ui.objectiveCard.setAttribute('aria-label', `Target shape: clean loop with ${target} flowers. ${remainingSeconds} seconds remain.`);
+        return;
+      }
+      if (isHollowRush) {
+        const seals = Array.from({ length: selectedMode.requiredSeals }, (_, index) => (
+          index < state.seals ? '\u25C6' : '\u25C7'
+        )).join(' ');
+        ui.objectiveKicker.textContent = `CROWN BLOOM / ${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+        ui.objectiveText.textContent = seals;
+        ui.objectiveProgress.textContent = `${state.seals} / ${selectedMode.requiredSeals} SEALS`;
+        ui.objectiveCard.setAttribute('aria-label', `Guardian seals: ${state.seals} of ${selectedMode.requiredSeals}. ${remainingSeconds} seconds remain.`);
+        return;
+      }
+      ui.objectiveCard.setAttribute('aria-label', `${remainingSeconds} seconds remain. Close loops and keep at least one petal.`);
       ui.objectiveKicker.textContent = `QUICK BLOOM · ${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
       ui.objectiveText.textContent = isMobileProfile()
         ? 'Close loops · keep a petal'
@@ -2495,8 +2702,8 @@
   }
 
   function updateHud() {
-    const phaseTitle = isPetalRush
-      ? 'PETAL RUSH'
+    const phaseTitle = isArcadeMode
+      ? selectedMode.name.toUpperCase()
       : phaseDefs[state.phaseIndex]?.title || 'LUMENLOOM';
     ui.phaseName.textContent = isMobileProfile()
       ? ({ 'FIRST STITCH': 'STITCH', 'THE HOLLOW': 'HOLLOW' }[phaseTitle] || phaseTitle)
@@ -2504,7 +2711,11 @@
     ui.scoreValue.textContent = formatNumber(state.score);
     ui.bestValue.textContent = isPetalRush
       ? '90 SECOND SCORE ATTACK'
-      : `BEST ${formatNumber(Math.max(state.best, state.score))}`;
+      : isShiftingConstellation
+        ? `TARGET MATCHES ${state.targetMatches}`
+        : isHollowRush
+          ? `GUARDIAN SEALS ${state.seals} / ${selectedMode.requiredSeals}`
+          : `BEST ${formatNumber(Math.max(state.best, state.score))}`;
     const lumenPercent = clamp(state.lumen / state.maxLumen * 100, 0, 100);
     ui.lumenFill.style.width = `${lumenPercent}%`;
     ui.lumenFill.classList.toggle('is-low', lumenPercent < 24 || state.frayTimer > 0);
@@ -2519,10 +2730,14 @@
     ui.weaveButton.setAttribute('aria-label', weaving ? 'Release and close the weave' : 'Begin weaving');
     const multiplier = 1 + state.comboStack * 0.25;
     ui.comboBadge.classList.toggle('is-hidden', state.comboStack <= 0 || state.mode === 'title');
-    ui.comboValue.textContent = isPetalRush
+    ui.comboValue.textContent = isArcadeMode
       ? `${state.comboStack + 1} LOOP CHAIN`
       : `×${multiplier.toFixed(2).replace(/0$/, '')}`;
-    const progress = state.phaseTarget ? clamp(state.phaseProgress / state.phaseTarget * 100, 0, 100) : 0;
+    const progress = isShiftingConstellation
+      ? clamp((selectedMode.targetWindowMs - state.targetClockMs) / selectedMode.targetWindowMs * 100, 0, 100)
+      : state.phaseTarget
+        ? clamp(state.phaseProgress / state.phaseTarget * 100, 0, 100)
+        : 0;
     ui.objectiveFill.style.width = `${progress}%`;
     updateObjective();
   }
@@ -3217,11 +3432,13 @@
     const firstId = state.chain[0];
     const visualTarget = getVisualTargetState();
     const closureReady = visualTarget.targetState === 'closure-ready';
-    for (const anchor of state.anchors) {
+    for (let anchorIndex = 0; anchorIndex < state.anchors.length; anchorIndex++) {
+      const anchor = state.anchors[anchorIndex];
       const activeIndex = state.chain.indexOf(anchor.id);
       const first = anchor.id === firstId;
       const highlighted = visualTarget.targetState === 'near' && visualTarget.targetAnchorId === anchor.id;
       const nextTarget = visualTarget.targetState === 'active' && visualTarget.targetAnchorId === anchor.id && !first;
+      const constellationGuide = isShiftingConstellation && anchorIndex < selectedMode.targetVertices[state.targetIndex];
       const pulse = 1 + Math.sin(anchor.phase * 2) * 0.05;
       ctx.save();
       ctx.translate(anchor.x, anchor.y);
@@ -3268,15 +3485,24 @@
         ctx.fill();
       }
 
-      if (first || highlighted || nextTarget || (state.phaseIndex === 0 && anchor.guide >= 0 && !state.chain.length)) {
+      if (first || highlighted || nextTarget || constellationGuide || (state.phaseIndex === 0 && anchor.guide >= 0 && !state.chain.length)) {
         const ring = reducedMotion ? 31 : 31 + Math.sin(state.runTime * 4 + anchor.phase) * 4;
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = first ? 0.68 : nextTarget ? 0.46 : 0.25;
-        ctx.strokeStyle = first ? '#ffd977' : nextTarget ? '#9df8e5' : '#fff8da';
+        ctx.globalAlpha = first ? 0.68 : nextTarget ? 0.46 : constellationGuide ? 0.4 : 0.25;
+        ctx.strokeStyle = first ? '#ffd977' : nextTarget ? '#9df8e5' : constellationGuide ? '#d6a7ff' : '#fff8da';
         ctx.lineWidth = first ? 1.8 : nextTarget ? 1.4 : 1;
         ctx.beginPath();
         ctx.arc(0, 0, ring, 0, TAU);
         ctx.stroke();
+        if (constellationGuide && activeIndex < 0) {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 0.84;
+          ctx.fillStyle = '#ead7ff';
+          ctx.font = '800 10px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(anchorIndex + 1), 0, -36);
+        }
 
         if (highlighted) {
           ctx.save();
@@ -3964,83 +4190,135 @@
       type,
       state.enemies.filter((enemy) => !enemy.dead && enemy.type === type).length
     ]));
+    const floorCounts = Object.fromEntries(PETAL_THREAT_TYPES.map((type) => [
+      type,
+      state.enemies.filter((enemy) => !enemy.dead && enemy.rosterSlot === type).length
+    ]));
+    const guardian = state.enemies.find((enemy) => !enemy.dead && enemy.type === 'boss') || null;
+    const bonusEnemies = state.enemies.filter((enemy) => (
+      !enemy.dead && enemy.type !== 'boss' && !PETAL_THREAT_TYPES.includes(enemy.rosterSlot)
+    )).length;
     return Object.freeze({
       selectedModeId,
       runtimeMode: state.mode,
       victory: state.mode === 'result' ? state.completed : null,
       elapsedMs: state.arcadeElapsedMs,
-      durationMs: isPetalRush ? selectedMode.durationMs : null,
+      durationMs: isArcadeMode ? selectedMode.durationMs : null,
       score: Math.round(state.score),
       lives: state.lives,
       flowers: state.anchors.length,
       enemyCounts: Object.freeze(enemyCounts),
+      targetIndex: isShiftingConstellation ? state.targetIndex : null,
+      targetVertices: isShiftingConstellation ? selectedMode.targetVertices[state.targetIndex] : null,
+      targetClockMs: isShiftingConstellation ? state.targetClockMs : null,
+      targetMatches: isShiftingConstellation ? state.targetMatches : null,
+      seals: isHollowRush ? state.seals : null,
+      guardian: guardian ? Object.freeze({ hp: guardian.hp, invulnerable: guardian.invulnerable }) : null,
+      bonusEnemies,
+      floorCounts: Object.freeze(floorCounts),
       replacements: Object.freeze(state.arcadeReplacementQueue.map((replacement) => Object.freeze({ ...replacement }))),
       proof: Object.freeze({ ...buildRunProof() })
     });
   }
 
-  function advancePetalRushClockForQa(milliseconds) {
-    if (!isPetalRush || state.mode !== 'playing') {
-      throw new Error('Start a Petal Rush run before advancing its QA clock.');
+  function advanceArcadeClockForQa(milliseconds) {
+    if (!isArcadeMode || state.mode !== 'playing') {
+      throw new Error('Start an arcade run before advancing its QA clock.');
     }
     const delta = Number(milliseconds);
     if (!Number.isSafeInteger(delta) || delta < 0 || delta > selectedMode.durationMs) {
-      throw new RangeError('Petal Rush QA milliseconds must be a safe integer within one full run.');
+      throw new RangeError('Arcade QA milliseconds must be a safe integer within one full run.');
     }
     state.runTime += delta / 1000;
-    const finished = advancePetalRushClock(delta);
-    if (!finished) maintainPetalRushThreatFloor(false);
+    const guardian = state.enemies.find((enemy) => !enemy.dead && enemy.type === 'boss');
+    if (guardian) guardian.invulnerable = Math.max(0, guardian.invulnerable - delta / 1000);
+    const finished = advanceArcadeClock(delta);
+    if (!finished) maintainArcadeThreatFloor(false);
     updateHud();
     return getArcadeQaSnapshot();
   }
 
-  function capturePetalRushThreatForQa(type, count = 1) {
-    if (!isPetalRush || state.mode !== 'playing' || !PETAL_THREAT_TYPES.includes(type)) {
-      throw new Error('Petal Rush QA capture requires an active canonical threat type.');
+  function captureArcadeThreatForQa(type, count = 1) {
+    if (!isArcadeMode || state.mode !== 'playing' || !PETAL_THREAT_TYPES.includes(type)) {
+      throw new Error('Arcade QA capture requires an active canonical threat type.');
     }
     const amount = Number(count);
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 4) {
-      throw new RangeError('Petal Rush QA capture count must be an integer from 1 to 4.');
+      throw new RangeError('Arcade QA capture count must be an integer from 1 to 4.');
     }
     const captured = state.enemies
-      .filter((enemy) => !enemy.dead && enemy.type === type)
+      .filter((enemy) => !enemy.dead && enemy.rosterSlot === type)
       .slice(0, amount);
     captured.forEach((enemy) => {
       enemy.dead = true;
-      schedulePetalRushReplacement(enemy);
+      scheduleArcadeReplacement(enemy);
     });
     state.enemies = state.enemies.filter((enemy) => !enemy.dead);
-    maintainPetalRushThreatFloor(false);
+    maintainArcadeThreatFloor(false);
     return getArcadeQaSnapshot();
   }
 
-  function creditPetalRushLoopForQa(vertices, shadows, clean, elapsedMs) {
-    if (!isPetalRush || state.mode !== 'playing') {
-      throw new Error('Petal Rush QA loop credit requires an active run.');
+  function captureArcadeBonusForQa(type, count = 1) {
+    if (!isHollowRush || state.mode !== 'playing' || !['drifter', 'seeker'].includes(type)) {
+      throw new Error('Hollow Rush bonus capture requires an active bonus threat type.');
+    }
+    const amount = Number(count);
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 4) {
+      throw new RangeError('Hollow Rush bonus capture count must be an integer from 1 to 4.');
+    }
+    const captured = state.enemies
+      .filter((enemy) => !enemy.dead && enemy.type === type && !PETAL_THREAT_TYPES.includes(enemy.rosterSlot))
+      .slice(0, amount);
+    captured.forEach((enemy) => { enemy.dead = true; });
+    state.enemies = state.enemies.filter((enemy) => !enemy.dead);
+    maintainArcadeThreatFloor(false);
+    return getArcadeQaSnapshot();
+  }
+
+  function creditArcadeLoopForQa(vertices, shadows, clean, elapsedMs, guardianSeal = false) {
+    if (!isArcadeMode || state.mode !== 'playing') {
+      throw new Error('Arcade QA loop credit requires an active run.');
     }
     const atMs = Number(elapsedMs);
     if (!Number.isSafeInteger(atMs)
       || atMs < state.arcadeElapsedMs
       || atMs >= selectedMode.durationMs) {
-      throw new RangeError('Petal Rush QA loop time must be monotonic and earlier than the finish.');
+      throw new RangeError('Arcade QA loop time must be monotonic and earlier than the finish.');
     }
+    const delta = atMs - state.arcadeElapsedMs;
+    advanceConstellationClock(delta);
+    const guardian = state.enemies.find((enemy) => !enemy.dead && enemy.type === 'boss') || null;
+    if (guardian) guardian.invulnerable = Math.max(0, guardian.invulnerable - delta / 1000);
     state.arcadeClockMs = atMs;
     state.arcadeElapsedMs = atMs;
-    state.phaseProgress = atMs;
     state.phaseTime = (selectedMode.durationMs - atMs) / 1000;
     state.runTime = atMs / 1000;
-    const credited = creditPetalRushLoop(Number(vertices), Number(shadows), Boolean(clean));
+    const canSeal = Boolean(guardianSeal) && Boolean(guardian) && guardian.invulnerable <= 0;
+    const credited = creditArcadeLoop(
+      Number(vertices),
+      Number(shadows),
+      Boolean(clean),
+      canSeal
+    );
+    if (credited.seal && guardian) {
+      guardian.hp = Math.max(0, selectedMode.requiredSeals - state.seals);
+      guardian.invulnerable = state.seals < selectedMode.requiredSeals ? 2.35 : 0;
+      guardian.dead = state.seals >= selectedMode.requiredSeals;
+      releaseHollowSealThreats();
+    }
+    state.phaseProgress = isHollowRush ? state.seals : atMs;
+    if (credited.seal && state.seals >= selectedMode.requiredSeals) finishRun(true);
     updateHud();
     return Object.freeze({ ...getArcadeQaSnapshot(), credited });
   }
 
-  function defeatPetalRushForQa(elapsedMs) {
-    if (!isPetalRush || state.mode !== 'playing') {
-      throw new Error('Petal Rush QA defeat requires an active run.');
+  function defeatArcadeForQa(elapsedMs) {
+    if (!isArcadeMode || state.mode !== 'playing') {
+      throw new Error('Arcade QA defeat requires an active run.');
     }
     const atMs = Number(elapsedMs);
     if (!Number.isSafeInteger(atMs) || atMs < 0 || atMs >= selectedMode.durationMs) {
-      throw new RangeError('Petal Rush QA defeat must happen before 90 seconds.');
+      throw new RangeError('Arcade QA defeat must happen before the mode timer ends.');
     }
     state.arcadeClockMs = atMs;
     state.arcadeElapsedMs = atMs;
@@ -4179,12 +4457,25 @@
       return Object.freeze({ mode: state.mode, completed: state.completed, score: Math.round(state.score) });
     }
     if (state.mode === 'title') startRun();
-    if (isPetalRush) {
+    if (isArcadeMode) {
       if (state.mode !== 'playing') {
-        throw new Error('Wait for the Grove to accept the Petal Rush start before completing QA.');
+        throw new Error('Wait for the Grove to accept the arcade start before completing QA.');
       }
-      if (victory) {
-        advancePetalRushClock(selectedMode.durationMs - state.arcadeClockMs);
+      if (victory && isHollowRush) {
+        while (state.mode === 'playing' && state.seals < selectedMode.requiredSeals) {
+          const guardian = state.enemies.find((enemy) => !enemy.dead && enemy.type === 'boss');
+          if (!guardian) throw new Error('Hollow Rush QA requires its active Guardian.');
+          guardian.invulnerable = 0;
+          creditArcadeLoopForQa(
+            selectedMode.loop.minimumVertices,
+            0,
+            true,
+            Math.min(selectedMode.durationMs - 1, state.arcadeElapsedMs + 1),
+            true
+          );
+        }
+      } else if (victory) {
+        advanceArcadeClock(selectedMode.durationMs - state.arcadeClockMs);
       } else {
         state.lives = 0;
         finishRun(false);
@@ -4205,15 +4496,17 @@
   if (qaHostAllowed) {
     window.__LUMENLOOM_QA__ = Object.freeze({
       getControlProfile: () => controlProfile,
+      getGameplayDpr: () => DPR,
       getSelectedMode: () => Object.freeze({ id: selectedModeId, mode: selectedMode }),
       getPlayBounds: () => Object.freeze({ ...playBounds }),
       getGeometrySnapshot,
       getFrayBalance: () => FRAY_BALANCE,
       getArcadeSnapshot: getArcadeQaSnapshot,
-      advanceArcadeClock: advancePetalRushClockForQa,
-      captureArcadeThreat: capturePetalRushThreatForQa,
-      creditArcadeLoop: creditPetalRushLoopForQa,
-      defeatArcadeRun: defeatPetalRushForQa,
+      advanceArcadeClock: advanceArcadeClockForQa,
+      captureArcadeBonusThreat: captureArcadeBonusForQa,
+      captureArcadeThreat: captureArcadeThreatForQa,
+      creditArcadeLoop: creditArcadeLoopForQa,
+      defeatArcadeRun: defeatArcadeForQa,
       setFrayContactScenario,
       rescueFrayingWeaveForQa,
       triggerMoonfallDuringFrayForQa,
@@ -4228,6 +4521,7 @@
       renderForQa,
       assertCosmeticIsolation,
       resolveControlProfile,
+      resolveGameplayDpr,
       calculatePlayBounds,
       calculateTutorialLayout,
       clampPointToBounds,
@@ -4235,12 +4529,24 @@
     });
   }
 
+  function scheduleFrame() {
+    if (animationFrameId || document.hidden || state.mode === 'paused') return;
+    animationFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopFrameLoop() {
+    if (!animationFrameId) return;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = 0;
+  }
+
   function frame(time) {
+    animationFrameId = 0;
     const dt = Math.min(0.033, Math.max(0, (time - lastFrame) / 1000));
     lastFrame = time;
     update(dt);
     render();
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }
 
   function setupQaControls() {
@@ -4380,9 +4686,13 @@
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      stopFrameLoop();
       input.actionPointers.clear();
       resetMobileStick();
       if (state.mode === 'playing' || state.mode === 'transition') pauseGame();
+    } else {
+      lastFrame = performance.now();
+      scheduleFrame();
     }
   });
 
@@ -4558,5 +4868,5 @@
   } else {
     window.setTimeout(() => ui.playButton.focus({ preventScroll: true }), 100);
   }
-  requestAnimationFrame(frame);
+  scheduleFrame();
 })();
